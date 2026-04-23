@@ -45,13 +45,12 @@ if not st.session_state.logged_in:
     st.markdown('<style>body { background-color: #1a1a2e; }</style>', unsafe_allow_html=True)
     st.write("<br><br><br>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 1.2, 1]) # Ajuste leve na proporção da coluna central
+    col1, col2, col3 = st.columns([1, 1.2, 1]) 
     with col2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        # --- LOGO AJUSTADA NA TELA DE LOGIN ---
+        # --- LOGO AJUSTADA NA TELA DE LOGIN (METADE DO TAMANHO) ---
         if os.path.exists("logo.png"):
-            # Definindo largura fixa de 150px (aproximadamente metade do anterior)
-            st.image("logo.png", width=150) 
+            st.image("logo.png", width=75) 
         
         st.markdown("<h2 style='color: #333; margin-top:0;'>Acesso Restrito</h2>", unsafe_allow_html=True)
         u = st.text_input("Usuário")
@@ -71,10 +70,9 @@ def logout():
     st.session_state.logged_in = False
     st.rerun()
 
-# --- LOGO AJUSTADA NA SIDEBAR ---
+# --- LOGO AJUSTADA NA SIDEBAR (METADE DO TAMANHO) ---
 if os.path.exists("logo.png"):
-    # Definindo largura fixa de 120px para não poluir o menu
-    st.sidebar.image("logo.png", width=120)
+    st.sidebar.image("logo.png", width=60)
 st.sidebar.markdown("<h3 style='text-align: center; margin-top:0;'>Copa Engenharia</h3>", unsafe_allow_html=True)
 st.sidebar.divider()
 
@@ -144,7 +142,6 @@ elif menu == "📝 Lançar":
         
         with st.form("form_abast", clear_on_submit=True):
             c1, c2 = st.columns(2)
-            # Usa o campo 'nome' (fantasia) para seleção
             posto = c1.selectbox("Posto Fornecedor", df_f['nome'].tolist())
             data = c2.date_input("Data do Abastecimento")
             
@@ -214,4 +211,21 @@ elif menu == "🏪 Fornecedores":
                 st.rerun()
 
     with t1:
-        df_f = get_data("fornecedores
+        df_f = get_data("fornecedores")
+        for i, r in df_f.iterrows():
+            with st.expander(f"🏪 {r['nome'].upper()}"):
+                st.write(f"**Razão Social:** {r.get('razao_social', 'N/A')}")
+                st.write(f"**CNPJ:** {r['cnpj']} | **PIX:** {r['pix']}")
+                if st.button("Remover", key=f"f_{r['id']}"):
+                    supabase.table("fornecedores").delete().eq("id", r['id']).execute()
+                    st.rerun()
+
+# --- PÁGINA: RELATÓRIOS ---
+elif menu == "📋 Relatórios":
+    st.header("Histórico de Abastecimentos")
+    df = get_data("abastecimentos")
+    if not df.empty:
+        st.dataframe(df, use_container_width=True)
+        st.download_button("Baixar Relatório (CSV)", df.to_csv(index=False), "relatorio_copa.csv")
+    else:
+        st.info("Nenhum dado encontrado.")
