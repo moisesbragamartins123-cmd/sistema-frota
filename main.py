@@ -8,26 +8,12 @@ import os
 # 1. Configuração e Estética de Alto Nível
 st.set_page_config(page_title="Copa Engenharia", layout="wide")
 
-# CSS customizado para centralizar login, estilizar métricas e enquadrar logo
+# CSS customizado para estilizar métricas e fontes
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     [data-testid="stMetricValue"] { font-size: 1.8rem !important; color: #003366; font-weight: 700; }
     .stButton>button { border-radius: 8px; font-weight: bold; }
-    .login-box {
-        background-color: #ffffff;
-        padding: 40px;
-        border-radius: 20px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        text-align: center;
-    }
-    /* Centraliza a imagem dentro da div de login */
-    .login-box img {
-        margin-left: auto;
-        margin-right: auto;
-        display: block;
-        margin-bottom: 20px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -47,22 +33,28 @@ if not st.session_state.logged_in:
     
     col1, col2, col3 = st.columns([1, 1.2, 1]) 
     with col2:
-        st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        # --- LOGO AJUSTADA NA TELA DE LOGIN (METADE DO TAMANHO) ---
-        if os.path.exists("logo.png"):
-            st.image("logo.png", width=75) 
-        
-        st.markdown("<h2 style='color: #333; margin-top:0;'>Acesso Restrito</h2>", unsafe_allow_html=True)
-        u = st.text_input("Usuário")
-        p = st.text_input("Senha", type="password")
-        
-        if st.button("ENTRAR NO SISTEMA", use_container_width=True):
-            if u == "admin" and p == "obra2026":
-                st.session_state.logged_in = True
-                st.rerun()
-            else:
-                st.error("Dados de acesso incorretos")
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Usando o Form nativo do Streamlit para criar o "Cartão" de login
+        with st.form("login_form"):
+            # Centralizando a logo com colunas internas
+            c_img1, c_img2, c_img3 = st.columns([1, 1, 1])
+            with c_img2:
+                if os.path.exists("logo.png"):
+                    st.image("logo.png", use_container_width=True) 
+            
+            st.markdown("<h2 style='text-align: center; color: #333; margin-top:0;'>Acesso Restrito</h2>", unsafe_allow_html=True)
+            
+            u = st.text_input("Usuário")
+            p = st.text_input("Senha", type="password")
+            
+            st.write("") # Espaçamento
+            submit = st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True)
+            
+            if submit:
+                if u == "admin" and p == "obra2026":
+                    st.session_state.logged_in = True
+                    st.rerun()
+                else:
+                    st.error("Dados de acesso incorretos")
     st.stop()
 
 # --- NAVEGAÇÃO INTERNA ---
@@ -70,9 +62,12 @@ def logout():
     st.session_state.logged_in = False
     st.rerun()
 
-# --- LOGO AJUSTADA NA SIDEBAR (METADE DO TAMANHO) ---
+# --- LOGO AJUSTADA NA SIDEBAR ---
 if os.path.exists("logo.png"):
-    st.sidebar.image("logo.png", width=60)
+    col_s1, col_s2, col_s3 = st.sidebar.columns([1, 2, 1])
+    with col_s2:
+        st.image("logo.png", use_container_width=True)
+        
 st.sidebar.markdown("<h3 style='text-align: center; margin-top:0;'>Copa Engenharia</h3>", unsafe_allow_html=True)
 st.sidebar.divider()
 
@@ -82,7 +77,7 @@ st.sidebar.divider()
 # Centraliza o botão de sair na sidebar
 col_side1, col_side2, col_side3 = st.sidebar.columns([1,2,1])
 with col_side2:
-    if st.button("🚪 Sair", key="side_logout"):
+    if st.button("🚪 Sair", key="side_logout", use_container_width=True):
         logout()
 
 # Função para buscar dados
