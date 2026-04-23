@@ -7,10 +7,9 @@ import os
 import time
 import io
 
-# 1. Configuração e Estética de Alto Nível
 st.set_page_config(page_title="Copa Engenharia", layout="wide")
 
-# CSS customizado
+# CSS
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -19,19 +18,18 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Conexão Supabase
+# Supabase Connect
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# --- LÓGICA DE LOGIN ---
+# --- LOGIN ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
     st.markdown('<style>body { background-color: #1a1a2e; }</style>', unsafe_allow_html=True)
     st.write("<br><br><br>", unsafe_allow_html=True)
-    
     col1, col2, col3 = st.columns([1, 1.2, 1]) 
     with col2:
         with st.form("login_form"):
@@ -39,15 +37,11 @@ if not st.session_state.logged_in:
             with c_img2:
                 if os.path.exists("logo.png"):
                     st.image("logo.png", use_container_width=True) 
-            
             st.markdown("<h2 style='text-align: center; color: #333; margin-top:0;'>Acesso Restrito</h2>", unsafe_allow_html=True)
-            
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
-            
             st.write("") 
             submit = st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True)
-            
             if submit:
                 if u == "admin" and p == "obra2026":
                     st.session_state.logged_in = True
@@ -56,7 +50,7 @@ if not st.session_state.logged_in:
                     st.error("Dados de acesso incorretos")
     st.stop()
 
-# --- NAVEGAÇÃO INTERNA ---
+# --- MENU ---
 def logout():
     st.session_state.logged_in = False
     st.rerun()
@@ -68,22 +62,24 @@ if os.path.exists("logo.png"):
         
 st.sidebar.markdown("<h3 style='text-align: center; margin-top:0;'>Copa Engenharia</h3>", unsafe_allow_html=True)
 st.sidebar.divider()
-
 menu = st.sidebar.radio("Menu Principal", ["🏠 Início", "📝 Lançar", "🚜 Frota", "🏪 Fornecedores", "📋 Relatórios"])
-
 st.sidebar.divider()
+
 col_side1, col_side2, col_side3 = st.sidebar.columns([1,2,1])
 with col_side2:
     if st.button("🚪 Sair", key="side_logout", use_container_width=True):
         logout()
 
+# FUNÇÃO MODIFICADA PARA MOSTRAR OS ERROS:
 def get_data(table):
     try:
         res = supabase.table(table).select("*").execute()
         return pd.DataFrame(res.data)
-    except: return pd.DataFrame()
+    except Exception as e:
+        st.error(f"⚠️ Erro ao ler a tabela '{table}': {e}")
+        return pd.DataFrame()
 
-# --- PÁGINA: INÍCIO ---
+# --- INÍCIO ---
 if menu == "🏠 Início":
     st.title("Resumo da Operação")
     df = get_data("abastecimentos")
@@ -100,25 +96,21 @@ if menu == "🏠 Início":
         st.divider()
         st.subheader("Consumo por Combustível")
         resumo_comb = df.groupby('tipo_combustivel')['quantidade'].sum().reset_index()
-        
         if len(resumo_comb) > 0:
             cols = st.columns(len(resumo_comb))
             for i, row in resumo_comb.iterrows():
                 nome_comb = row['tipo_combustivel'] if pd.notna(row['tipo_combustivel']) else "Não Informado"
                 cols[i].metric(nome_comb, f"{row['quantidade']:,.1f} L")
-        else:
-            st.info("Nenhum dado de combustível detalhado para exibir.")
-
-        st.write("<br>", unsafe_allow_html=True)
+        
         with st.expander("📈 Visualizar Gráficos de Tendência"):
             df['data'] = pd.to_datetime(df['data'])
             df['Mes'] = df['data'].dt.strftime('%m/%Y')
             f_gasto = px.bar(df.groupby('Mes')['total'].sum().reset_index(), x='Mes', y='total', title="Gastos Mensais (R$)")
             st.plotly_chart(f_gasto, use_container_width=True)
     else:
-        st.info("Lance dados para gerar o painel de indicadores.")
+        st.info("Nenhum abastecimento encontrado. Comece a lançar dados na aba 'Lançar'!")
 
-# --- PÁGINA: LANÇAR ---
+# --- LANÇAR ---
 elif menu == "📝 Lançar":
     st.header("Lançamento de Abastecimento")
     df_v = get_data("veiculos")
@@ -126,7 +118,6 @@ elif menu == "📝 Lançar":
     
     if not df_v.empty and not df_f.empty:
         veic_sel = st.selectbox("Selecione o Veículo/Máquina", df_v['prefixo'].tolist())
-        
         info_v = df_v[df_v['prefixo'] == veic_sel].iloc[0]
         comb_v = info_v.get('tipo_combustivel_padrao', 'Não definido')
         placa_v = info_v.get('placa', 'N/A')
@@ -137,8 +128,93 @@ elif menu == "📝 Lançar":
             c1, c2 = st.columns(2)
             posto = c1.selectbox("Posto Fornecedor", df_f['nome'].tolist())
             data = c2.date_input("Data do Abastecimento")
-            
             c3, c4, c5 = st.columns(3)
             horimetro = c3.number_input("Horímetro Atual", min_value=0.0, step=0.1)
             litros = c4.number_input("Litros", min_value=0.0)
             preco = c5.number_input("Preço Unitário (R$)", min_value=0.0)
+            
+            if st.form_submit_button("Confirmar Lançamento"):
+                try:
+                    supabase.table("abastecimentos").insert({
+                        "data": str(data), "prefixo": veic_sel, "quantidade": litros, "valor_unitario": preco,
+                        "total": litros*preco, "fornecedor": posto, "tipo_combustivel": comb_v,
+                        "horimetro": horimetro
+                    }).execute()
+                    st.success("Abastecimento registrado com sucesso!")
+                except Exception as e:
+                    st.error(f"Erro ao salvar: {e}")
+    else:
+        st.warning("⚠️ Cadastre primeiro sua Frota e Fornecedores antes de lançar!")
+
+# --- FROTA ---
+elif menu == "🚜 Frota":
+    st.header("Gestão de Frota e Categorias")
+    tab_frota, tab_classes = st.tabs(["🚜 Veículos", "📂 Gerenciar Classes"])
+
+    with tab_classes:
+        st.subheader("Criar Novas Classes")
+        with st.form("form_classe", clear_on_submit=True):
+            nova_classe = st.text_input("Nome da Classe (Ex: Caçambas)")
+            if st.form_submit_button("Criar Classe"):
+                if nova_classe:
+                    try:
+                        supabase.table("classes_frota").insert({"nome": nova_classe}).execute()
+                        st.success(f"Classe '{nova_classe}' criada!")
+                        time.sleep(1.5)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
+
+        df_classes = get_data("classes_frota")
+        if not df_classes.empty:
+            for _, c in df_classes.iterrows():
+                st.write(f"• {c['nome']}")
+
+    with tab_frota:
+        st.subheader("Cadastrar Veículo")
+        df_classes = get_data("classes_frota")
+        if df_classes.empty:
+            st.warning("Crie uma Classe na aba ao lado primeiro.")
+        else:
+            with st.form("form_veic", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                prefixo = c1.text_input("Prefixo (ID)")
+                placa = c2.text_input("Placa")
+                c3, c4 = st.columns(2)
+                classe_sel = c3.selectbox("Selecione a Classe", df_classes['nome'].tolist())
+                combustivel = c4.selectbox("Combustível", ["Diesel S10", "Diesel S500", "Gasolina", "Arla 32"])
+                motorista = st.text_input("Motorista")
+                
+                if st.form_submit_button("Salvar Veículo"):
+                    try:
+                        supabase.table("veiculos").insert({
+                            "prefixo": prefixo, "placa": placa, "classe": classe_sel, 
+                            "motorista": motorista, "tipo_combustivel_padrao": combustivel
+                        }).execute()
+                        st.success("Salvo com sucesso!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: {e}")
+
+        st.divider()
+        df_v = get_data("veiculos")
+        if not df_v.empty:
+            for i, r in df_v.iterrows():
+                with st.expander(f"🚜 {r['prefixo']} - Categoria: {r.get('classe', '')}"):
+                    st.write(f"Combustível: {r.get('tipo_combustivel_padrao', '')} | Motorista: {r['motorista']}")
+
+# --- FORNECEDORES ---
+elif menu == "🏪 Fornecedores":
+    st.header("Fornecedores e Postos")
+    t1, t2 = st.tabs(["Lista de Parceiros", "Novo Fornecedor"])
+    
+    with t2:
+        with st.form("new_f", clear_on_submit=True):
+            nome_fantasia = st.text_input("Nome Fantasia")
+            razao_social = st.text_input("Razão Social")
+            c1, c2, c3, c4 = st.columns(4)
+            cnpj = c1.text_input("CNPJ")
+            agencia = c2.text_input("Agência")
+            conta = c3.text_input("Conta")
+            pix = c4.text_input("Ch
