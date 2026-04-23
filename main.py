@@ -4,11 +4,12 @@ import pandas as pd
 from datetime import datetime
 import plotly.express as px
 import os
+import time  # Importante para o tempo da mensagem de sucesso
 
 # 1. Configuração e Estética de Alto Nível
 st.set_page_config(page_title="Copa Engenharia", layout="wide")
 
-# CSS customizado para estilizar métricas e fontes
+# CSS customizado
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -27,15 +28,12 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    # Fundo Escuro na Tela de Login
     st.markdown('<style>body { background-color: #1a1a2e; }</style>', unsafe_allow_html=True)
     st.write("<br><br><br>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.2, 1]) 
     with col2:
-        # Usando o Form nativo do Streamlit para criar o "Cartão" de login
         with st.form("login_form"):
-            # Centralizando a logo com colunas internas
             c_img1, c_img2, c_img3 = st.columns([1, 1, 1])
             with c_img2:
                 if os.path.exists("logo.png"):
@@ -46,7 +44,7 @@ if not st.session_state.logged_in:
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
             
-            st.write("") # Espaçamento
+            st.write("") 
             submit = st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True)
             
             if submit:
@@ -62,7 +60,6 @@ def logout():
     st.session_state.logged_in = False
     st.rerun()
 
-# --- LOGO AJUSTADA NA SIDEBAR ---
 if os.path.exists("logo.png"):
     col_s1, col_s2, col_s3 = st.sidebar.columns([1, 2, 1])
     with col_s2:
@@ -74,13 +71,11 @@ st.sidebar.divider()
 menu = st.sidebar.radio("Menu Principal", ["🏠 Início", "📝 Lançar", "🚜 Frota", "🏪 Fornecedores", "📋 Relatórios"])
 
 st.sidebar.divider()
-# Centraliza o botão de sair na sidebar
 col_side1, col_side2, col_side3 = st.sidebar.columns([1,2,1])
 with col_side2:
     if st.button("🚪 Sair", key="side_logout", use_container_width=True):
         logout()
 
-# Função para buscar dados
 def get_data(table):
     try:
         res = supabase.table(table).select("*").execute()
@@ -96,7 +91,6 @@ if menu == "🏠 Início":
         df['total'] = pd.to_numeric(df['total'])
         df['quantidade'] = pd.to_numeric(df['quantidade'])
         
-        # MÉTRICAS FIXAS NO TOPO
         m1, m2, m3 = st.columns(3)
         m1.metric("Investimento Total", f"R$ {df['total'].sum():,.2f}")
         m2.metric("Volume Total (Litros)", f"{df['quantidade'].sum():,.1f} L")
@@ -106,17 +100,14 @@ if menu == "🏠 Início":
         st.subheader("Consumo por Combustível")
         resumo_comb = df.groupby('tipo_combustivel')['quantidade'].sum().reset_index()
         
-        # CORREÇÃO APLICADA AQUI: Trava de segurança para evitar o erro de colunas
         if len(resumo_comb) > 0:
             cols = st.columns(len(resumo_comb))
             for i, row in resumo_comb.iterrows():
-                # Se o tipo_combustivel estiver vazio (None), substitui por "Não Informado"
                 nome_comb = row['tipo_combustivel'] if pd.notna(row['tipo_combustivel']) else "Não Informado"
                 cols[i].metric(nome_comb, f"{row['quantidade']:,.1f} L")
         else:
             st.info("Nenhum dado de combustível detalhado para exibir.")
 
-        # GRÁFICOS OCULTOS (EXPANDER)
         st.write("<br>", unsafe_allow_html=True)
         with st.expander("📈 Visualizar Gráficos de Tendência"):
             df['data'] = pd.to_datetime(df['data'])
@@ -135,7 +126,6 @@ elif menu == "📝 Lançar":
     if not df_v.empty and not df_f.empty:
         veic_sel = st.selectbox("Selecione o Veículo/Máquina", df_v['prefixo'].tolist())
         
-        # Puxa informações automáticas do veículo
         info_v = df_v[df_v['prefixo'] == veic_sel].iloc[0]
         comb_v = info_v.get('tipo_combustivel_padrao', 'Não definido')
         placa_v = info_v.get('placa', 'N/A')
@@ -173,22 +163,29 @@ elif menu == "🚜 Frota":
     tipos_comb = ["Diesel S10", "Diesel S500", "Gasolina", "Arla 32", "Diversos"]
 
     with t2:
-        with st.form("new_v"):
-            c1, c2 = st.columns(2)
+        # clear_on_submit=True limpa os campos automaticamente após o cadastro!
+        with st.form("new_v", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
             pre = c1.text_input("Prefixo (Ex: CAM-01)")
             pla = c2.text_input("Placa")
-            mot = c1.text_input("Motorista/Operador")
-            comb = c2.selectbox("Combustível Padrão", tipos_comb)
+            classe = c3.text_input("Classe (Ex: Caminhão, Trator)")
+            
+            c4, c5 = st.columns(2)
+            mot = c4.text_input("Motorista/Operador")
+            comb = c5.selectbox("Combustível Padrão", tipos_comb)
+            
             if st.form_submit_button("Salvar Veículo"):
                 supabase.table("veiculos").insert({
-                    "prefixo": pre, "placa": pla, "motorista": mot, "tipo_combustivel_padrao": comb
+                    "prefixo": pre, "placa": pla, "classe": classe, "motorista": mot, "tipo_combustivel_padrao": comb
                 }).execute()
+                st.success(f"Veículo/Classe '{pre}' criado com sucesso!")
+                time.sleep(1.5) # Pausa para você ler a mensagem
                 st.rerun()
 
     with t1:
         df_v = get_data("veiculos")
         for i, r in df_v.iterrows():
-            with st.expander(f"🚜 {r['prefixo']} - {r.get('placa', 'S/P')}"):
+            with st.expander(f"🚜 {r['prefixo']} - {r.get('classe', 'Sem classe')} - {r.get('placa', 'S/P')}"):
                 st.write(f"**Combustível:** {r.get('tipo_combustivel_padrao', '---')} | **Motorista:** {r['motorista']}")
                 if st.button("🗑️ Excluir", key=f"v_{r['id']}"):
                     supabase.table("veiculos").delete().eq("id", r['id']).execute()
@@ -200,24 +197,32 @@ elif menu == "🏪 Fornecedores":
     t1, t2 = st.tabs(["Lista de Parceiros", "Novo Fornecedor"])
     
     with t2:
-        with st.form("new_f"):
+        # clear_on_submit=True limpa os campos automaticamente após o cadastro!
+        with st.form("new_f", clear_on_submit=True):
             nome_fantasia = st.text_input("Nome Fantasia (Como é conhecido)", placeholder="Ex: Posto do Trevo")
             razao_social = st.text_input("Razão Social (Nome na Nota)", placeholder="Ex: Auto Posto Silva Ltda")
-            c1, c2 = st.columns(2)
+            
+            c1, c2, c3, c4 = st.columns(4)
             cnpj = c1.text_input("CNPJ")
-            pix = c2.text_input("Chave PIX")
+            agencia = c2.text_input("Agência")
+            conta = c3.text_input("Conta")
+            pix = c4.text_input("Chave PIX")
+            
             if st.form_submit_button("Cadastrar Fornecedor"):
                 supabase.table("fornecedores").insert({
-                    "nome": nome_fantasia, "razao_social": razao_social, "cnpj": cnpj, "pix": pix
+                    "nome": nome_fantasia, "razao_social": razao_social, "cnpj": cnpj, 
+                    "agencia": agencia, "conta": conta, "pix": pix
                 }).execute()
+                st.success(f"Fornecedor '{nome_fantasia}' cadastrado com sucesso!")
+                time.sleep(1.5) # Pausa para você ler a mensagem
                 st.rerun()
 
     with t1:
         df_f = get_data("fornecedores")
         for i, r in df_f.iterrows():
             with st.expander(f"🏪 {r['nome'].upper()}"):
-                st.write(f"**Razão Social:** {r.get('razao_social', 'N/A')}")
-                st.write(f"**CNPJ:** {r['cnpj']} | **PIX:** {r['pix']}")
+                st.write(f"**Razão Social:** {r.get('razao_social', 'N/A')} | **CNPJ:** {r['cnpj']}")
+                st.write(f"**Agência:** {r.get('agencia', '---')} | **Conta:** {r.get('conta', '---')} | **PIX:** {r['pix']}")
                 if st.button("Remover", key=f"f_{r['id']}"):
                     supabase.table("fornecedores").delete().eq("id", r['id']).execute()
                     st.rerun()
