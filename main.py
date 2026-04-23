@@ -254,11 +254,17 @@ elif menu == "🏪 Fornecedores":
             conta = c3.text_input("Conta")
             pix = c4.text_input("Chave PIX")
             
+            # Novos campos discretos de banco
+            cb1, cb2 = st.columns(2)
+            banco = cb1.text_input("Nome do Banco")
+            tipo_conta = cb2.selectbox("Tipo de Conta", ["Corrente", "Poupança", "Outra"])
+            
             if st.form_submit_button("Cadastrar Fornecedor"):
                 try:
                     supabase.table("fornecedores").insert({
                         "nome": nome_fantasia, "razao_social": razao_social, "cnpj": cnpj, 
-                        "agencia": agencia, "conta": conta, "pix": pix
+                        "agencia": agencia, "conta": conta, "pix": pix,
+                        "banco": banco, "tipo_conta": tipo_conta # Salvando novos campos
                     }).execute()
                     st.success(f"Fornecedor '{nome_fantasia}' cadastrado com sucesso!")
                     time.sleep(1.5)
@@ -272,6 +278,7 @@ elif menu == "🏪 Fornecedores":
             for i, r in df_f.iterrows():
                 with st.expander(f"🏪 {r['nome'].upper()}"):
                     st.write(f"**Razão Social:** {r.get('razao_social', 'N/A')} | **CNPJ:** {r.get('cnpj', '---')}")
+                    st.write(f"**Banco:** {r.get('banco', '---')} | **Tipo:** {r.get('tipo_conta', '---')}")
                     st.write(f"**Agência:** {r.get('agencia', '---')} | **Conta:** {r.get('conta', '---')} | **PIX:** {r.get('pix', '---')}")
                     if st.button("Remover", key=f"f_{r['id']}"):
                         try:
@@ -280,12 +287,20 @@ elif menu == "🏪 Fornecedores":
                         except Exception as e:
                             st.error(f"Erro ao excluir: {e}")
 
-# --- PÁGINA: RELATÓRIOS (COM EXCEL SEGURO) ---
+# --- PÁGINA: RELATÓRIOS (COM FILTRO POR FORNECEDOR) ---
 elif menu == "📋 Relatórios":
     st.header("Relatórios de Abastecimento")
     df = get_data("abastecimentos")
 
     if not df.empty:
+        # Filtro por Fornecedor
+        lista_fornecedores = ["Todos"] + sorted(df['fornecedor'].unique().tolist())
+        filtro_fornecedor = st.selectbox("Filtrar por Fornecedor", lista_fornecedores)
+        
+        # Aplica o filtro antes de mostrar os dados e gerar o Excel
+        if filtro_fornecedor != "Todos":
+            df = df[df['fornecedor'] == filtro_fornecedor]
+
         # Puxa informações extras da tabela de veículos
         df_v = get_data("veiculos")
         if not df_v.empty:
@@ -295,13 +310,13 @@ elif menu == "📋 Relatórios":
             df['placa'] = "N/A"
 
         # Organizando as colunas para o Excel
-        colunas_ordenadas = ['id', 'data', 'fornecedor', 'prefixo', 'classe', 'placa', 'tipo_combustivel', 'quantidade', 'valor_unitario', 'total', 'horimetro']
+        colunas_ordenadas = ['data', 'fornecedor', 'prefixo', 'classe', 'placa', 'tipo_combustivel', 'quantidade', 'valor_unitario', 'total', 'horimetro']
         colunas_finais = [col for col in colunas_ordenadas if col in df.columns]
         df_export = df[colunas_finais]
         
         # Renomeia para português
         nomes_bonitos = {
-            'id': 'ID', 'data': 'Data', 'fornecedor': 'Posto/Fornecedor', 
+            'data': 'Data', 'fornecedor': 'Posto/Fornecedor', 
             'prefixo': 'Prefixo (Máquina)', 'classe': 'Classe', 'placa': 'Placa',
             'tipo_combustivel': 'Combustível', 'quantidade': 'Litros', 
             'valor_unitario': 'Preço Unit. (R$)', 'total': 'Total (R$)', 'horimetro': 'Horímetro'
@@ -326,13 +341,18 @@ elif menu == "📋 Relatórios":
                     tamanho_final = tamanho_titulo if pd.isna(tamanho_dados) else max(tamanho_titulo, int(tamanho_dados))
                     worksheet.set_column(i, i, tamanho_final + 2)
                 except:
-                    worksheet.set_column(i, i, 15) # Largura padrão em caso de erro
+                    worksheet.set_column(i, i, 15)
         
+        # Nome do arquivo muda se houver filtro
+        nome_arquivo = f"Relatorio_Frota_Copa_{datetime.now().strftime('%d_%m_%Y')}.xlsx"
+        if filtro_fornecedor != "Todos":
+            nome_arquivo = f"Relatorio_{filtro_fornecedor}_{datetime.now().strftime('%d_%m_%Y')}.xlsx"
+
         st.download_button(
-            label="📥 Baixar Relatório Completo em Excel",
+            label=f"📥 Baixar Relatório ({filtro_fornecedor}) em Excel",
             data=output.getvalue(),
-            file_name=f"Relatorio_Frota_Copa_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
+            file_name=nome_arquivo,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.info("Nenhum dado de abastecimento encontrado para exportar.")
+        st.info("Nenhum dado de abastecimento encontrado.")
