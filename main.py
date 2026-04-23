@@ -4,134 +4,155 @@ import pandas as pd
 from datetime import datetime
 import plotly.express as px
 
-# Configuração
+# Configuração da Página
 st.set_page_config(page_title="Copa Engenharia", layout="wide")
 
-# Conexão
+# Conexão Supabase
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-# Login Discreto
-if 'logged_in' not in st.session_state: st.session_state.logged_in = False
+# --- LOGIN DISCRETO ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
 if not st.session_state.logged_in:
-    c1, c2, c3 = st.columns([1,1,1])
-    with col2 := c2:
+    col1, col2, col3 = st.columns([1,1,1])
+    with col2:
+        st.write("")
         with st.container(border=True):
             st.subheader("Copa Engenharia - Login")
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
-            if st.button("Acessar"):
+            if st.button("Acessar Sistema"):
                 if u == "admin" and p == "obra2026":
                     st.session_state.logged_in = True
                     st.rerun()
+                else:
+                    st.error("Dados incorretos")
     st.stop()
 
-# Navegação Lateral
+# --- BARRA LATERAL (Título Discreto) ---
 st.sidebar.markdown("### 🏗️ Copa Engenharia Ltda")
+st.sidebar.caption("Controle de Abastecimento")
+st.sidebar.divider()
 menu = st.sidebar.radio("Navegação", ["📊 Dashboard", "📝 Lançar", "🚜 Frota", "🏪 Fornecedores", "📋 Relatórios"])
 
+# Função para buscar dados
 def get_data(table):
     try:
-        return pd.DataFrame(supabase.table(table).select("*").execute().data)
-    except: return pd.DataFrame()
+        res = supabase.table(table).select("*").execute()
+        return pd.DataFrame(res.data)
+    except:
+        return pd.DataFrame()
 
-# --- 1. DASHBOARD COM GRÁFICOS MENSAIS ---
+# --- 1. DASHBOARD COM GRÁFICOS ---
 if menu == "📊 Dashboard":
     st.header("Resumo Operacional")
     df = get_data("abastecimentos")
     
     if not df.empty:
         df['data'] = pd.to_datetime(df['data'])
-        df['Mes/Ano'] = df['data'].dt.strftime('%m/%Y')
+        df['Mês/Ano'] = df['data'].dt.strftime('%m/%Y')
         
-        # Filtros do Gráfico
-        col_f1, col_f2 = st.columns(2)
-        filtro_posto = col_f1.multiselect("Filtrar Gráfico por Posto", df['fornecedor'].unique())
-        filtro_comb = col_f2.multiselect("Filtrar por Combustível", df['tipo_combustivel'].unique())
+        c1, c2 = st.columns(2)
+        filtro_p = c1.multiselect("Filtrar por Posto", df['fornecedor'].unique())
         
         dff = df.copy()
-        if filtro_posto: dff = dff[dff['fornecedor'].isin(filtro_posto)]
-        if filtro_comb: dff = dff[dff['tipo_combustivel'].isin(filtro_comb)]
+        if filtro_p:
+            dff = dff[dff['fornecedor'].isin(filtro_p)]
 
-        # Gráfico de Colunas
-        resumo_mes = dff.groupby(['Mes/Ano', 'fornecedor', 'tipo_combustivel'])['total'].sum().reset_index()
-        fig = px.bar(resumo_mes, x='Mes/Ano', y='total', color='fornecedor', 
-                     title="Gasto Mensal por Fornecedor (R$)", barmode='group')
+        # Gráfico de Colunas Mensal
+        resumo = dff.groupby(['Mês/Ano', 'fornecedor'])['total'].sum().reset_index()
+        fig = px.bar(resumo, x='Mês/Ano', y='total', color='fornecedor', 
+                     title="Gasto Mensal por Posto (R$)", barmode='group')
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("Aguardando lançamentos para gerar gráficos.")
+        st.info("Ainda não há dados para gerar o Dashboard.")
 
 # --- 2. LANÇAR ABASTECIMENTO ---
 elif menu == "📝 Lançar":
-    st.header("Lançar Abastecimento")
-    df_v = get_data("veiculos"); df_f = get_data("fornecedores")
+    st.header("Novo Lançamento")
+    df_v = get_data("veiculos")
+    df_f = get_data("fornecedores")
+    
     with st.form("f_abast", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        veic = c1.selectbox("Veículo", df_v['prefixo'].tolist() if not df_v.empty else [])
-        forn = c2.selectbox("Posto", df_f['nome'].tolist() if not df_f.empty else [])
-        comb = c3.selectbox("Combustível", ["Diesel S10", "Diesel S500", "Gasolina", "Arla 32"])
+        c1, c2 = st.columns(2)
+        v = c1.selectbox("Equipamento", df_v['prefixo'].tolist() if not df_v.empty else [])
+        f = c2.selectbox("Fornecedor/Posto", df_f['nome'].tolist() if not df_f.empty else [])
+        tipo = c1.selectbox("Combustível", ["Diesel S10", "Diesel S500", "Gasolina", "Arla 32"])
         
-        data = c1.date_input("Data", datetime.now())
         qtd = c2.number_input("Litros", min_value=0.0)
-        val = c3.number_input("Valor Unitário", min_value=0.0)
+        preco = c1.number_input("Preço Unitário", min_value=0.0)
+        data_ab = c2.date_input("Data", datetime.now())
         
-        if st.form_submit_button("Salvar Registro"):
+        if st.form_submit_button("Salvar Abastecimento"):
             supabase.table("abastecimentos").insert({
-                "data": str(data), "prefixo": veic, "quantidade": qtd, 
-                "valor_unitario": val, "total": qtd*val, "fornecedor": forn, "tipo_combustivel": comb
+                "data": str(data_ab), "prefixo": v, "fornecedor": f,
+                "quantidade": qtd, "valor_unitario": preco, "total": qtd*preco,
+                "tipo_combustivel": tipo
             }).execute()
-            st.success("Lançado!")
+            st.success("Salvo com sucesso!")
 
-# --- 3. FROTA (COM EDIÇÃO/EXCLUSÃO) ---
+# --- 3. FROTA (COM EDITAR E APAGAR) ---
 elif menu == "🚜 Frota":
     st.header("Gestão de Frota")
-    tab1, tab2 = st.tabs(["Listar/Editar", "Novo Veículo"])
-    df_v = get_data("veiculos")
-    
-    with tab1:
-        if not df_v.empty:
-            for index, row in df_v.iterrows():
-                with st.expander(f"🚗 {row['prefixo']} - {row['classe']}"):
-                    with st.form(f"edit_v_{row['id']}"):
-                        new_mot = st.text_input("Motorista", row['motorista'])
-                        new_placa = st.text_input("Placa", row['placa'])
-                        col_e1, col_e2 = st.columns(2)
-                        if col_e1.form_submit_button("Atualizar"):
-                            supabase.table("veiculos").update({"motorista": new_mot, "placa": new_placa}).eq("id", row['id']).execute()
-                            st.rerun()
-                        if col_e2.form_submit_button("❌ APAGAR"):
-                            supabase.table("veiculos").delete().eq("id", row['id']).execute()
-                            st.rerun()
-
-# --- 4. FORNECEDORES (COM BANCO E EDIÇÃO) ---
-elif menu == "🏪 Fornecedores":
-    st.header("Fornecedores")
-    t1, t2 = st.tabs(["Lista/Ações", "Novo Cadastro"])
+    t1, t2 = st.tabs(["Listagem e Ações", "Cadastrar Novo"])
     
     with t2:
-        with st.form("f_new_f"):
-            nome = st.text_input("Razão Social")
+        with st.form("novo_v"):
+            p = st.text_input("Prefixo")
+            pl = st.text_input("Placa")
+            mot = st.text_input("Motorista Atual")
+            if st.form_submit_button("Cadastrar"):
+                supabase.table("veiculos").insert({"prefixo": p, "placa": pl, "motorista": mot}).execute()
+                st.rerun()
+
+    with t1:
+        df_v = get_data("veiculos")
+        for i, row in df_v.iterrows():
+            with st.expander(f"🚗 {row['prefixo']} - {row['motorista']}"):
+                with st.form(f"edit_{row['id']}"):
+                    u_mot = st.text_input("Editar Motorista", row['motorista'])
+                    u_placa = st.text_input("Editar Placa", row['placa'])
+                    col_btn1, col_btn2 = st.columns(2)
+                    if col_btn1.form_submit_button("✅ Salvar Alterações"):
+                        supabase.table("veiculos").update({"motorista": u_mot, "placa": u_placa}).eq("id", row['id']).execute()
+                        st.rerun()
+                    if col_btn2.form_submit_button("🗑️ EXCLUIR VEÍCULO"):
+                        supabase.table("veiculos").delete().eq("id", row['id']).execute()
+                        st.rerun()
+
+# --- 4. FORNECEDORES (COM DADOS BANCÁRIOS) ---
+elif menu == "🏪 Fornecedores":
+    st.header("Gestão de Fornecedores")
+    t1, t2 = st.tabs(["Lista de Fornecedores", "Novo Fornecedor"])
+    
+    with t2:
+        with st.form("novo_f"):
+            n = st.text_input("Nome/Posto")
             cnpj = st.text_input("CNPJ")
             c1, c2, c3 = st.columns(3)
             age = c1.text_input("Agência")
             cta = c2.text_input("Conta")
-            pix = c3.text_input("Chave PIX")
-            if st.form_submit_button("Cadastrar"):
-                supabase.table("fornecedores").insert({"nome": nome, "cnpj": cnpj, "agencia": age, "conta": cta, "pix": pix}).execute()
+            px = c3.text_input("Chave PIX")
+            if st.form_submit_button("Cadastrar Fornecedor"):
+                supabase.table("fornecedores").insert({"nome": n, "cnpj": cnpj, "agencia": age, "conta": cta, "pix": px}).execute()
                 st.rerun()
 
     with t1:
         df_f = get_data("fornecedores")
-        for i, r in df_f.iterrows():
-            with st.expander(f"🏪 {r['nome']}"):
-                st.write(f"CNPJ: {r['cnpj']} | PIX: {r['pix']}")
-                if st.button("Excluir Fornecedor", key=f"del_f_{r['id']}"):
-                    supabase.table("fornecedores").delete().eq("id", r['id']).execute()
+        for i, row in df_f.iterrows():
+            with st.expander(f"🏪 {row['nome']}"):
+                st.write(f"CNPJ: {row['cnpj']}")
+                st.write(f"Banco: Ag {row['agencia']} | Conta {row['conta']} | PIX: {row['pix']}")
+                if st.button("🗑️ Excluir", key=f"del_f_{row['id']}"):
+                    supabase.table("fornecedores").delete().eq("id", row['id']).execute()
                     st.rerun()
 
 # --- 5. RELATÓRIOS ---
 elif menu == "📋 Relatórios":
-    st.header("Relatórios para Financeiro")
+    st.header("Relatórios Detalhados")
     df = get_data("abastecimentos")
     st.dataframe(df, use_container_width=True)
+    st.download_button("Baixar CSV", df.to_csv(index=False), "relatorio_copa.csv")
