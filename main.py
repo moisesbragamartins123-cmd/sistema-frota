@@ -77,7 +77,7 @@ with col_side2:
     if st.button("🚪 Sair", key="side_logout", use_container_width=True):
         logout()
 
-# FUNÇÃO SEGURA PARA LER O BANCO DE DADOS (Mostra erros se houver)
+# FUNÇÃO SEGURA PARA LER O BANCO DE DADOS
 def get_data(table):
     try:
         res = supabase.table(table).select("*").execute()
@@ -280,7 +280,7 @@ elif menu == "🏪 Fornecedores":
                         except Exception as e:
                             st.error(f"Erro ao excluir: {e}")
 
-# --- PÁGINA: RELATÓRIOS (COM EXCEL COMPLETO) ---
+# --- PÁGINA: RELATÓRIOS (COM EXCEL SEGURO) ---
 elif menu == "📋 Relatórios":
     st.header("Relatórios de Abastecimento")
     df = get_data("abastecimentos")
@@ -294,14 +294,12 @@ elif menu == "📋 Relatórios":
             df['classe'] = "N/A"
             df['placa'] = "N/A"
 
-        # Organizando as colunas para o Excel de forma bonita e profissional
+        # Organizando as colunas para o Excel
         colunas_ordenadas = ['id', 'data', 'fornecedor', 'prefixo', 'classe', 'placa', 'tipo_combustivel', 'quantidade', 'valor_unitario', 'total', 'horimetro']
-        
-        # Filtra apenas as colunas que existem no dataframe
         colunas_finais = [col for col in colunas_ordenadas if col in df.columns]
         df_export = df[colunas_finais]
         
-        # Renomeia para português legível
+        # Renomeia para português
         nomes_bonitos = {
             'id': 'ID', 'data': 'Data', 'fornecedor': 'Posto/Fornecedor', 
             'prefixo': 'Prefixo (Máquina)', 'classe': 'Classe', 'placa': 'Placa',
@@ -313,15 +311,22 @@ elif menu == "📋 Relatórios":
         # Mostra na tela
         st.dataframe(df_export, use_container_width=True)
 
-        # Lógica para gerar Excel
+        # Lógica SEGURA para gerar Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df_export.to_excel(writer, index=False, sheet_name='Abastecimentos')
             workbook = writer.book
             worksheet = writer.sheets['Abastecimentos']
+            
+            # Formatação de tamanho de coluna segura
             for i, col in enumerate(df_export.columns):
-                max_len = max(df_export[col].astype(str).map(len).max(), len(str(col))) + 2
-                worksheet.set_column(i, i, max_len)
+                try:
+                    tamanho_titulo = len(str(col))
+                    tamanho_dados = df_export[col].astype(str).str.len().max()
+                    tamanho_final = tamanho_titulo if pd.isna(tamanho_dados) else max(tamanho_titulo, int(tamanho_dados))
+                    worksheet.set_column(i, i, tamanho_final + 2)
+                except:
+                    worksheet.set_column(i, i, 15) # Largura padrão em caso de erro
         
         st.download_button(
             label="📥 Baixar Relatório Completo em Excel",
