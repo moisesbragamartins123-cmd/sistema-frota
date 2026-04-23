@@ -8,7 +8,7 @@ import os
 # 1. Configuração e Estética de Alto Nível
 st.set_page_config(page_title="Copa Engenharia", layout="wide")
 
-# CSS customizado para centralizar login e estilizar métricas
+# CSS customizado para centralizar login, estilizar métricas e enquadrar logo
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -16,10 +16,17 @@ st.markdown("""
     .stButton>button { border-radius: 8px; font-weight: bold; }
     .login-box {
         background-color: #ffffff;
-        padding: 50px;
+        padding: 40px;
         border-radius: 20px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         text-align: center;
+    }
+    /* Centraliza a imagem dentro da div de login */
+    .login-box img {
+        margin-left: auto;
+        margin-right: auto;
+        display: block;
+        margin-bottom: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -38,13 +45,15 @@ if not st.session_state.logged_in:
     st.markdown('<style>body { background-color: #1a1a2e; }</style>', unsafe_allow_html=True)
     st.write("<br><br><br>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 1.4, 1])
+    col1, col2, col3 = st.columns([1, 1.2, 1]) # Ajuste leve na proporção da coluna central
     with col2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        # --- LOGO AJUSTADA NA TELA DE LOGIN ---
         if os.path.exists("logo.png"):
-            st.image("logo.png", use_container_width=True)
+            # Definindo largura fixa de 150px (aproximadamente metade do anterior)
+            st.image("logo.png", width=150) 
         
-        st.markdown("<h2 style='color: #333;'>Acesso Restrito</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: #333; margin-top:0;'>Acesso Restrito</h2>", unsafe_allow_html=True)
         u = st.text_input("Usuário")
         p = st.text_input("Senha", type="password")
         
@@ -57,21 +66,26 @@ if not st.session_state.logged_in:
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# --- NAVEGAÇÃO ---
+# --- NAVEGAÇÃO INTERNA ---
 def logout():
     st.session_state.logged_in = False
     st.rerun()
 
+# --- LOGO AJUSTADA NA SIDEBAR ---
 if os.path.exists("logo.png"):
-    st.sidebar.image("logo.png", use_container_width=True)
-st.sidebar.markdown("<h3 style='text-align: center;'>Copa Engenharia</h3>", unsafe_allow_html=True)
+    # Definindo largura fixa de 120px para não poluir o menu
+    st.sidebar.image("logo.png", width=120)
+st.sidebar.markdown("<h3 style='text-align: center; margin-top:0;'>Copa Engenharia</h3>", unsafe_allow_html=True)
 st.sidebar.divider()
 
 menu = st.sidebar.radio("Menu Principal", ["🏠 Início", "📝 Lançar", "🚜 Frota", "🏪 Fornecedores", "📋 Relatórios"])
 
 st.sidebar.divider()
-if st.sidebar.button("🚪 Sair"):
-    logout()
+# Centraliza o botão de sair na sidebar
+col_side1, col_side2, col_side3 = st.sidebar.columns([1,2,1])
+with col_side2:
+    if st.button("🚪 Sair", key="side_logout"):
+        logout()
 
 # Função para buscar dados
 def get_data(table):
@@ -130,6 +144,7 @@ elif menu == "📝 Lançar":
         
         with st.form("form_abast", clear_on_submit=True):
             c1, c2 = st.columns(2)
+            # Usa o campo 'nome' (fantasia) para seleção
             posto = c1.selectbox("Posto Fornecedor", df_f['nome'].tolist())
             data = c2.date_input("Data do Abastecimento")
             
@@ -199,21 +214,4 @@ elif menu == "🏪 Fornecedores":
                 st.rerun()
 
     with t1:
-        df_f = get_data("fornecedores")
-        for i, r in df_f.iterrows():
-            with st.expander(f"🏪 {r['nome'].upper()}"):
-                st.write(f"**Razão Social:** {r.get('razao_social', 'N/A')}")
-                st.write(f"**CNPJ:** {r['cnpj']} | **PIX:** {r['pix']}")
-                if st.button("Remover", key=f"f_{r['id']}"):
-                    supabase.table("fornecedores").delete().eq("id", r['id']).execute()
-                    st.rerun()
-
-# --- PÁGINA: RELATÓRIOS ---
-elif menu == "📋 Relatórios":
-    st.header("Histórico de Abastecimentos")
-    df = get_data("abastecimentos")
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-        st.download_button("Baixar Relatório (CSV)", df.to_csv(index=False), "relatorio_copa.csv")
-    else:
-        st.info("Nenhum dado encontrado.")
+        df_f = get_data("fornecedores
