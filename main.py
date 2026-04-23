@@ -4,7 +4,8 @@ import pandas as pd
 from datetime import datetime
 import plotly.express as px
 import os
-import time  # Importante para o tempo da mensagem de sucesso
+import time
+import io
 
 # 1. Configuração e Estética de Alto Nível
 st.set_page_config(page_title="Copa Engenharia", layout="wide")
@@ -141,98 +142,3 @@ elif menu == "📝 Lançar":
             horimetro = c3.number_input("Horímetro Atual", min_value=0.0, step=0.1)
             litros = c4.number_input("Litros", min_value=0.0)
             preco = c5.number_input("Preço Unitário (R$)", min_value=0.0)
-            
-            if st.form_submit_button("Confirmar Lançamento"):
-                if comb_v == 'Não definido' or pd.isna(comb_v):
-                    st.error("Erro: Veículo sem combustível padrão definido na Frota.")
-                else:
-                    supabase.table("abastecimentos").insert({
-                        "data": str(data), "prefixo": veic_sel, "quantidade": litros, "valor_unitario": preco,
-                        "total": litros*preco, "fornecedor": posto, "tipo_combustivel": comb_v,
-                        "horimetro": horimetro
-                    }).execute()
-                    st.success("Abastecimento registrado com sucesso!")
-    else:
-        st.warning("Cadastre primeiro a Frota e os Fornecedores.")
-
-# --- PÁGINA: FROTA ---
-elif menu == "🚜 Frota":
-    st.header("Gestão de Frota")
-    t1, t2 = st.tabs(["Frota Cadastrada", "Adicionar Novo"])
-    
-    tipos_comb = ["Diesel S10", "Diesel S500", "Gasolina", "Arla 32", "Diversos"]
-
-    with t2:
-        # clear_on_submit=True limpa os campos automaticamente após o cadastro!
-        with st.form("new_v", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            pre = c1.text_input("Prefixo (Ex: CAM-01)")
-            pla = c2.text_input("Placa")
-            classe = c3.text_input("Classe (Ex: Caminhão, Trator)")
-            
-            c4, c5 = st.columns(2)
-            mot = c4.text_input("Motorista/Operador")
-            comb = c5.selectbox("Combustível Padrão", tipos_comb)
-            
-            if st.form_submit_button("Salvar Veículo"):
-                supabase.table("veiculos").insert({
-                    "prefixo": pre, "placa": pla, "classe": classe, "motorista": mot, "tipo_combustivel_padrao": comb
-                }).execute()
-                st.success(f"Veículo/Classe '{pre}' criado com sucesso!")
-                time.sleep(1.5) # Pausa para você ler a mensagem
-                st.rerun()
-
-    with t1:
-        df_v = get_data("veiculos")
-        for i, r in df_v.iterrows():
-            with st.expander(f"🚜 {r['prefixo']} - {r.get('classe', 'Sem classe')} - {r.get('placa', 'S/P')}"):
-                st.write(f"**Combustível:** {r.get('tipo_combustivel_padrao', '---')} | **Motorista:** {r['motorista']}")
-                if st.button("🗑️ Excluir", key=f"v_{r['id']}"):
-                    supabase.table("veiculos").delete().eq("id", r['id']).execute()
-                    st.rerun()
-
-# --- PÁGINA: FORNECEDORES ---
-elif menu == "🏪 Fornecedores":
-    st.header("Fornecedores e Postos")
-    t1, t2 = st.tabs(["Lista de Parceiros", "Novo Fornecedor"])
-    
-    with t2:
-        # clear_on_submit=True limpa os campos automaticamente após o cadastro!
-        with st.form("new_f", clear_on_submit=True):
-            nome_fantasia = st.text_input("Nome Fantasia (Como é conhecido)", placeholder="Ex: Posto do Trevo")
-            razao_social = st.text_input("Razão Social (Nome na Nota)", placeholder="Ex: Auto Posto Silva Ltda")
-            
-            c1, c2, c3, c4 = st.columns(4)
-            cnpj = c1.text_input("CNPJ")
-            agencia = c2.text_input("Agência")
-            conta = c3.text_input("Conta")
-            pix = c4.text_input("Chave PIX")
-            
-            if st.form_submit_button("Cadastrar Fornecedor"):
-                supabase.table("fornecedores").insert({
-                    "nome": nome_fantasia, "razao_social": razao_social, "cnpj": cnpj, 
-                    "agencia": agencia, "conta": conta, "pix": pix
-                }).execute()
-                st.success(f"Fornecedor '{nome_fantasia}' cadastrado com sucesso!")
-                time.sleep(1.5) # Pausa para você ler a mensagem
-                st.rerun()
-
-    with t1:
-        df_f = get_data("fornecedores")
-        for i, r in df_f.iterrows():
-            with st.expander(f"🏪 {r['nome'].upper()}"):
-                st.write(f"**Razão Social:** {r.get('razao_social', 'N/A')} | **CNPJ:** {r['cnpj']}")
-                st.write(f"**Agência:** {r.get('agencia', '---')} | **Conta:** {r.get('conta', '---')} | **PIX:** {r['pix']}")
-                if st.button("Remover", key=f"f_{r['id']}"):
-                    supabase.table("fornecedores").delete().eq("id", r['id']).execute()
-                    st.rerun()
-
-# --- PÁGINA: RELATÓRIOS ---
-elif menu == "📋 Relatórios":
-    st.header("Histórico de Abastecimentos")
-    df = get_data("abastecimentos")
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-        st.download_button("Baixar Relatório (CSV)", df.to_csv(index=False), "relatorio_copa.csv")
-    else:
-        st.info("Nenhum dado encontrado.")
