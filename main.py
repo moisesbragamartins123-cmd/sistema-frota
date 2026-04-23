@@ -105,9 +105,16 @@ if menu == "🏠 Início":
         st.divider()
         st.subheader("Consumo por Combustível")
         resumo_comb = df.groupby('tipo_combustivel')['quantidade'].sum().reset_index()
-        cols = st.columns(len(resumo_comb))
-        for i, row in resumo_comb.iterrows():
-            cols[i].metric(row['tipo_combustivel'], f"{row['quantidade']:,.1f} L")
+        
+        # CORREÇÃO APLICADA AQUI: Trava de segurança para evitar o erro de colunas
+        if len(resumo_comb) > 0:
+            cols = st.columns(len(resumo_comb))
+            for i, row in resumo_comb.iterrows():
+                # Se o tipo_combustivel estiver vazio (None), substitui por "Não Informado"
+                nome_comb = row['tipo_combustivel'] if pd.notna(row['tipo_combustivel']) else "Não Informado"
+                cols[i].metric(nome_comb, f"{row['quantidade']:,.1f} L")
+        else:
+            st.info("Nenhum dado de combustível detalhado para exibir.")
 
         # GRÁFICOS OCULTOS (EXPANDER)
         st.write("<br>", unsafe_allow_html=True)
@@ -146,7 +153,7 @@ elif menu == "📝 Lançar":
             preco = c5.number_input("Preço Unitário (R$)", min_value=0.0)
             
             if st.form_submit_button("Confirmar Lançamento"):
-                if comb_v == 'Não definido':
+                if comb_v == 'Não definido' or pd.isna(comb_v):
                     st.error("Erro: Veículo sem combustível padrão definido na Frota.")
                 else:
                     supabase.table("abastecimentos").insert({
