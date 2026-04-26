@@ -36,52 +36,79 @@ supabase = create_client(url, key)
 
 # --- FUNÇÃO GERADORA DE EXCEL COM TEMPLATE (CAMINHO A) ---
 def gerar_excel_com_template(df, dados_fornecedor, periodo_str, obra_str):
-    # Tratamento para tirar o "nan" e deixar a tabela perfeitamente limpa
+    # Tratamento para limpar os valores vazios ("nan")
     df = df.fillna("")
     
     template_path = "template_posto.xlsx"
     
-    # Se o usuário já enviou o arquivo template_posto.xlsx para o GitHub, usamos ele!
+    # Dicionário para calcular os dias da semana em português
+    dias_pt = {0: 'SEG', 1: 'TER', 2: 'QUA', 3: 'QUI', 4: 'SEX', 5: 'SÁB', 6: 'DOM'}
+    
     if os.path.exists(template_path):
         from openpyxl import load_workbook
         wb = load_workbook(template_path)
         ws = wb.active
         
-        # 1. Preenche o Cabeçalho Timbrado (Ajuste as células conforme o seu desenho no Excel)
-        ws['C2'] = obra_str.upper()
-        ws['C4'] = periodo_str.upper()
-        ws['G2'] = dados_fornecedor.get('nome', '').upper()
-        ws['G3'] = f"PIX: {dados_fornecedor.get('pix', '')}"
-        ws['G4'] = f"BANCO: {dados_fornecedor.get('banco', '')} / AG: {dados_fornecedor.get('agencia', '')} / CC: {dados_fornecedor.get('conta', '')}"
+        # 1. Preenche o Cabeçalho Esquerdo (Alinhado com a imagem do usuário)
+        ws['D1'] = obra_str.upper()
+        ws['D3'] = periodo_str.upper()
         
-        # 2. Insere os dados da tabela (assumindo que a linha 8 é o cabeçalho, começamos na 9)
-        linha_inicio = 9
+        # 2. Preenche o Cabeçalho Direito (Dados Bancários fatiados nos seus devidos lugares)
+        ws['J1'] = dados_fornecedor.get('razao_social', dados_fornecedor.get('nome', '')).upper()
+        ws['J2'] = dados_fornecedor.get('agencia', '')
+        ws['J3'] = dados_fornecedor.get('conta', '')
+        
+        ws['M1'] = dados_fornecedor.get('pix', '')
+        ws['M2'] = dados_fornecedor.get('tipo_conta', '')
+        ws['M3'] = dados_fornecedor.get('banco', '')
+        
+        # 3. Insere os dados da tabela (Agora começando exatamente na linha 8)
+        linha_inicio = 8
         for index, row in df.iterrows():
-            ws.cell(row=linha_inicio+index, column=1, value=str(row.get('data',''))[:10])
-            ws.cell(row=linha_inicio+index, column=2, value=str(row.get('numero_ficha','')))
-            ws.cell(row=linha_inicio+index, column=3, value=str(row.get('placa','')))
-            ws.cell(row=linha_inicio+index, column=4, value=str(row.get('prefixo','')))
-            ws.cell(row=linha_inicio+index, column=5, value=str(row.get('motorista','')))
-            ws.cell(row=linha_inicio+index, column=6, value=str(row.get('tipo_combustivel','')))
+            # Calcula o Dia da Semana
+            dia_str = ""
+            data_val = str(row.get('data',''))[:10]
+            try:
+                if data_val:
+                    dt_obj = datetime.strptime(data_val, '%Y-%m-%d')
+                    dia_str = dias_pt[dt_obj.weekday()]
+            except:
+                pass
+
+            # Preenchendo as 13 colunas exatas do Template (A até M)
+            ws.cell(row=linha_inicio+index, column=1, value=data_val)                                # A: DATA
+            ws.cell(row=linha_inicio+index, column=2, value=dia_str)                                 # B: DIA DA SEMANA
+            ws.cell(row=linha_inicio+index, column=3, value=str(row.get('numero_ficha','')))         # C: FICHA
+            ws.cell(row=linha_inicio+index, column=4, value=str(row.get('placa','')))                # D: PLACA
+            ws.cell(row=linha_inicio+index, column=5, value=str(row.get('prefixo','')))              # E: CÓDIGO
+            ws.cell(row=linha_inicio+index, column=6, value=str(row.get('motorista','')))            # F: VEÍCULO / OPERADOR
+            ws.cell(row=linha_inicio+index, column=7, value=str(row.get('fornecedor','')))           # G: FORNECEDOR
+            ws.cell(row=linha_inicio+index, column=8, value=str(row.get('tipo_combustivel','')))     # H: TIPO COMB.
             
+            # Formatação de Valores Numéricos (I, J, K)
             qtd = float(row.get('quantidade', 0)) if row.get('quantidade') else 0.0
             v_unit = float(row.get('valor_unitario', 0)) if row.get('valor_unitario') else 0.0
             tot = float(row.get('total', 0)) if row.get('total') else 0.0
             
-            ws.cell(row=linha_inicio+index, column=7, value=qtd).number_format = '#,##0.00'
-            ws.cell(row=linha_inicio+index, column=8, value=v_unit).number_format = '"R$" #,##0.00'
-            ws.cell(row=linha_inicio+index, column=9, value=tot).number_format = '"R$" #,##0.00'
-            ws.cell(row=linha_inicio+index, column=10, value=str(row.get('horimetro','')))
-            ws.cell(row=linha_inicio+index, column=11, value=str(row.get('observacao','')))
+            ws.cell(row=linha_inicio+index, column=9, value=qtd).number_format = '#,##0.00'          # I: QUANTIDADE
+            ws.cell(row=linha_inicio+index, column=10, value=v_unit).number_format = '"R$" #,##0.00' # J: VALOR UN.
+            ws.cell(row=linha_inicio+index, column=11, value=tot).number_format = '"R$" #,##0.00'    # K: TOTAL
+            
+            ws.cell(row=linha_inicio+index, column=12, value=str(row.get('horimetro','')))           # L: KM/HOR
+            ws.cell(row=linha_inicio+index, column=13, value=str(row.get('observacao','')))          # M: OBS
             
         buffer = io.BytesIO()
         wb.save(buffer)
         return buffer.getvalue()
         
-    # FALLBACK: Se o template ainda não existir, gera um Excel limpo e sem o bug do "nan"
+    # FALLBACK: Se o template não for encontrado, gera um limpo alinhado com 13 colunas
     else:
-        df_export = df[['data', 'numero_ficha', 'placa', 'prefixo', 'motorista', 'tipo_combustivel', 'quantidade', 'valor_unitario', 'total', 'horimetro', 'observacao']].copy()
-        df_export.columns = ["DATA", "FICHA", "PLACA", "PREFIXO", "MÁQUINA/OPERADOR", "PRODUTO", "QTD (L)", "V. UNIT. (R$)", "TOTAL (R$)", "KM/HOR", "OBSERVAÇÃO"]
+        df_export = df.copy()
+        df_export['DIA'] = pd.to_datetime(df_export['data'], errors='coerce').dt.weekday.map(dias_pt)
+        colunas_certas = ['data', 'DIA', 'numero_ficha', 'placa', 'prefixo', 'motorista', 'fornecedor', 'tipo_combustivel', 'quantidade', 'valor_unitario', 'total', 'horimetro', 'observacao']
+        df_export = df_export[[c for c in colunas_certas if c in df_export.columns]]
+        df_export.columns = ["DATA", "DIA", "FICHA", "PLACA", "CÓDIGO", "MÁQUINA/OPERADOR", "FORNECEDOR", "PRODUTO", "QTD (L)", "V. UNIT. (R$)", "TOTAL (R$)", "KM/HOR", "OBSERVAÇÃO"]
+        
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_export.to_excel(writer, index=False, sheet_name='Fechamento')
@@ -93,7 +120,6 @@ def gerar_excel_com_template(df, dados_fornecedor, periodo_str, obra_str):
 
 # --- FUNÇÃO GERADORA DE PDF ---
 def gerar_pdf_relatorio(df, tipo, titulo_esq, sub_esq, data_esq, dados_dir, titulo_tabela):
-    # Limpa os 'nan' antes do PDF também
     df = df.fillna("")
     
     pdf = FPDF(orientation="L", unit="mm", format="A4")
@@ -205,7 +231,6 @@ def gerar_pdf_relatorio(df, tipo, titulo_esq, sub_esq, data_esq, dados_dir, titu
     return pdf.output(dest='S').encode('latin-1')
 
 def exportar_excel_limpo(df_formatado, nome_aba="Relatorio"):
-    # Limpa os 'nan' antes de exportar
     df_formatado = df_formatado.fillna("")
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -322,6 +347,8 @@ if menu == "🏠 Painel Início":
                 df_grafico = df_abast_filtrado.groupby('Dia')['total'].sum().reset_index()
                 f_gasto = px.bar(df_grafico, x='Dia', y='total', title=f"Gastos Diários em {mes_selecionado}", color_discrete_sequence=['#1D9E75'])
             st.plotly_chart(f_gasto, use_container_width=True)
+    else:
+        st.info("Nenhum dado de abastecimento registrado.")
 
 # --- PÁGINA: LANÇAR ABASTECIMENTO ---
 elif menu == "📝 Lançar Abastecimento":
@@ -395,7 +422,8 @@ elif menu == "🛢️ Tanques / Estoque":
             for _, r in df_t.iterrows():
                 cb1, cb2 = st.columns([4, 1])
                 cb1.write(f"🛢️ **{r['nome']}** | {r.get('capacidade', 0)} L")
-                if cb2.button("Remover", key=f"dt_{r['id']}"): supabase.table("tanques").delete().eq("id", r['id']).execute(); st.rerun()
+                if cb2.button("Remover", key=f"dt_{r['id']}"):
+                    supabase.table("tanques").delete().eq("id", r['id']).execute(); st.rerun()
 
     with t_entrada:
         df_t = get_data("tanques")
@@ -496,7 +524,6 @@ elif menu == "📋 Relatórios / PDF":
     df_t = get_data("tanques")
     df_v = get_data("veiculos")
     
-    # Tratamento contra o bug do 'nan' direto na base de relatórios
     df_s = df_s.fillna("")
     df_e = df_e.fillna("")
     
