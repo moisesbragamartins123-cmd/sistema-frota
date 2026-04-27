@@ -461,39 +461,26 @@ if not st.session_state.logged_in:
 
     st.stop()
 
-
 # ═══════════════════════════════════════════════════════════════════
 # SIDEBAR
 # ═══════════════════════════════════════════════════════════════════
 with st.sidebar:
+    
+    # LOGO CENTRALIZADA E MAIOR
     if os.path.exists("logo.png"):
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
-            st.image("logo.png", width=220)
+            st.image("logo.png", width=300)
 
+    # USUÁRIO LOGADO
     st.markdown(
         f"<div style='text-align:center;color:#1D9E75;font-size:13px;font-weight:bold;'>👤 {st.session_state.usuario_logado}</div>",
         unsafe_allow_html=True
     )
-
+    
     st.divider()
-
-    # 🔐 BOTÃO SAIR
-    if st.button("🚪 Sair", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.usuario_logado = ""
-        st.session_state.perfil_logado = ""
-        st.rerun()
-
-    # 💾 MEMÓRIA
-    mem = psutil.virtual_memory()
-    st.markdown(
-        f"<div style='text-align:center;font-size:12px;'>💾 Memória: <b>{mem.percent}%</b></div>",
-        unsafe_allow_html=True
-    )
-
-    st.divider()
-
+    
+    # MENU
     opcoes = [
         "🏠 Painel Início",
         "⛽ Lançar Abastecimento",
@@ -503,13 +490,25 @@ with st.sidebar:
         "🏪 Fornecedores",
         "📋 Relatórios e Fechamentos"
     ]
-            
+
     if st.session_state.perfil_logado == "Admin":
         opcoes.append("👥 Usuários e Acessos")
 
-    menu = st.sidebar.radio("", opcoes, label_visibility="collapsed")
+    menu = st.radio("", opcoes, label_visibility="collapsed")
 
     st.divider()
+
+    # ESPAÇO PARA EMPURRAR O BOTÃO PARA O FINAL
+    st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
+
+    # BOTÃO DE SAIR (DISCRETO)
+    if st.button("Sair"):
+        st.session_state.logged_in = False
+        st.session_state.usuario_logado = ""
+        st.session_state.perfil_logado = ""
+        st.rerun()
+
+    # RODAPÉ
     st.caption("☁️ Supabase — Tempo Real")
 # ════════════════════════════════════════════════════════════════════
 # 1 · PAINEL INÍCIO
