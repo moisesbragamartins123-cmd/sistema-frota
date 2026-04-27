@@ -5,3 +5,4 @@ plotly
 xlsxwriter
 fpdf
 openpyxl
+psutil
