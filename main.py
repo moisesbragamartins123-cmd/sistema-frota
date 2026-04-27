@@ -89,9 +89,6 @@ div[data-testid="stForm"] {
 # ═══════════════════════════════════════════════════════════════════
 # SUPABASE E BANCO DE DADOS (COM TEMPO REAL)
 # ═══════════════════════════════════════════════════════════════════
-# ═══════════════════════════════════════════════════════════════════
-# SUPABASE E BANCO DE DADOS (COM TEMPO REAL)
-# ═══════════════════════════════════════════════════════════════════
 @st.cache_resource
 def get_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
@@ -126,6 +123,11 @@ def delete_data(table: str, row_id) -> bool:
 def calcular_saldo(nome_tanque: str) -> float:
     df_ent = get_data("entradas_tanque")
     df_sai = get_data("abastecimentos")
+    
+    # 🔥 CORREÇÃO: Ignorar os abastecimentos cancelados no cálculo do tanque
+    if not df_sai.empty and "status" in df_sai.columns:
+        df_sai = df_sai[df_sai["status"] == "ATIVO"]
+        
     t_ent = 0.0
     if not df_ent.empty and "nome_tanque" in df_ent.columns:
         t_ent = pd.to_numeric(df_ent[df_ent["nome_tanque"]==nome_tanque]["quantidade"], errors="coerce").sum()
@@ -229,7 +231,10 @@ if menu == "🏠 Painel Início":
         df_tanq = get_data("tanques")
         df_ab   = get_data("abastecimentos")
         df_prod = get_data("producao")
-
+        
+        # 🔥 CORREÇÃO: Fazer o Painel inteiro ignorar os cancelados!
+        if not df_ab.empty and "status" in df_ab.columns:
+            df_ab = df_ab[df_ab["status"] == "ATIVO"]
     # TANQUES
     if not df_tanq.empty:
         st.subheader("🛢️ Situação dos Tanques / Comboios")
@@ -715,6 +720,11 @@ elif menu=="📋 Relatórios e Fechamentos":
     with aba1:
         st.markdown("#### Gerar Fechamento de Posto Externo")
         df_a=get_data("abastecimentos"); df_f=get_data("fornecedores")
+        
+        # 🔥 CORREÇÃO: Filtrar apenas os abastecimentos ativos, ignorando os cancelados
+        if not df_a.empty and "status" in df_a.columns:
+            df_a = df_a[df_a["status"] == "ATIVO"]
+            
         c1,c2,c3=st.columns(3)
         dt_i=c1.date_input("Início (Saídas)",value=date.today().replace(day=1))
         dt_f=c2.date_input("Fim (Saídas)",value=date.today())
@@ -751,7 +761,6 @@ elif menu=="📋 Relatórios e Fechamentos":
                     
                     xl_limpo=gerar_excel_limpo(df_filtro,"Saídas")
                     c6.download_button("📊 Excel Tabela Limpa",data=xl_limpo,file_name="Tabela_Saidas.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
-
     with aba2:
         st.markdown("#### Fechamento Físico de Tanques (Entradas vs Saídas)")
         df_ent=get_data("entradas_tanque"); df_t=get_data("tanques")
