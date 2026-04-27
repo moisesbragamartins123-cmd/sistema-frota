@@ -405,7 +405,7 @@ if not st.session_state.logged_in:
             if os.path.exists("logo.png"): 
                 col_l1, col_l2, col_l3 = st.columns([1, 1.5, 1])
                 with col_l2:
-                    st.image("logo.png", width=220)
+                    st.image("logo.png", width=260)
             
             st.markdown("<h2 style='text-align:center;color:#1E293B;font-weight:700;margin-bottom:1.5rem;'>Acesso Restrito</h2>", unsafe_allow_html=True)
             u = st.text_input("Usuário")
