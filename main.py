@@ -513,39 +513,72 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════════
 # 1 · PAINEL INÍCIO
 # ════════════════════════════════════════════════════════════════════
-if menu=="🏠 Painel Início":
-    st.markdown("## 🏠 Centro de Comando")
+# ════════════════════════════════════════════════════════════════════
+# SISTEMA COMPLETO - PAINEL + ABASTECIMENTO (VERSÃO MELHORADA)
+# ════════════════════════════════════════════════════════════════════
 
-    # 🔄 FUNÇÃO SEM CACHE (DADOS SEMPRE ATUALIZADOS)
-    def get_data(tabela):
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from datetime import date
+
+# ════════════════════════════════════════════════════════════════════
+# FUNÇÕES GLOBAIS
+# ════════════════════════════════════════════════════════════════════
+
+@st.cache_data(ttl=60)
+def get_data(tabela):
+    try:
         res = supabase.table(tabela).select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+    except Exception as e:
+        st.error(f"Erro ao buscar {tabela}: {e}")
+        return pd.DataFrame()
 
-    df_tanq = get_data("tanques")
-    df_ab   = get_data("abastecimentos")
-    df_prod = get_data("producao")
+# ════════════════════════════════════════════════════════════════════
+# 1 · PAINEL INÍCIO
+# ════════════════════════════════════════════════════════════════════
 
-    # ═══════════════════════════════════════════════════════════════
+if menu == "🏠 Painel Início":
+
+    st.markdown("## 🏠 Centro de Comando")
+
+    with st.spinner("Carregando dados..."):
+        df_tanq = get_data("tanques")
+        df_ab   = get_data("abastecimentos")
+        df_prod = get_data("producao")
+
+    # ═══════════════════════════════════════════════
     # TANQUES
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
+
     if not df_tanq.empty:
         st.subheader("🛢️ Situação dos Tanques / Comboios")
+
         cols_t = st.columns(min(len(df_tanq), 5))
 
+        saldos = {
+            row["nome"]: calcular_saldo(row["nome"])
+            for _, row in df_tanq.iterrows()
+        }
+
         for idx, row in df_tanq.iterrows():
+
             nm = row["nome"]
             cap = float(row.get("capacidade", 0) or 0)
-            sd = calcular_saldo(nm)
-            lim = (cap * 0.15) if cap > 0 else 500
+            sd = saldos.get(nm, 0)
+
+            lim = cap * 0.15 if cap > 0 else 500
+            low = sd <= lim
+
+            cls = "banner-low" if low else "banner-ok"
+            ic = "⚠️" if low else "✅"
+            pct = f" / {sd/cap*100:.0f}%" if cap > 0 else ""
 
             with cols_t[idx % len(cols_t)]:
-                low = sd <= lim
-                cls = "banner-low" if low else "banner-ok"
-                ic  = "⚠️" if low else "✅"
-                pct_txt = f" / {sd/cap*100:.0f}%" if cap > 0 else ""
 
                 st.markdown(
-                    f"<div class='{cls}'>{ic} <strong>{nm}</strong><br>{sd:,.1f} L{pct_txt}</div>",
+                    f"<div class='{cls}'>{ic} <strong>{nm}</strong><br>{sd:,.1f} L{pct}</div>",
                     unsafe_allow_html=True
                 )
 
@@ -554,99 +587,84 @@ if menu=="🏠 Painel Início":
 
         st.divider()
 
-    # ═══════════════════════════════════════════════════════════════
-    # FILTRO DE PERÍODO
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
+    # FILTRO PERÍODO
+    # ═══════════════════════════════════════════════
+
     st.markdown("#### 📅 Indicadores do Período")
 
-    cd1, cd2 = st.columns(2)
-    d_ini = cd1.date_input("De", value=date.today().replace(day=1))
-    d_fim = cd2.date_input("Até", value=date.today())
+    c1, c2 = st.columns(2)
+    d_ini = c1.date_input("De", value=date.today().replace(day=1))
+    d_fim = c2.date_input("Até", value=date.today())
 
-    # ═══════════════════════════════════════════════════════════════
-    # INICIALIZAÇÃO SEGURA
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
+    # INICIALIZAÇÃO
+    # ═══════════════════════════════════════════════
+
     t_gasto = 0
     t_litros = 0
     t_carradas = 0
     t_ton = 0
     t_ton_cbuq = 0
 
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
     # ABASTECIMENTOS
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
+
     if not df_ab.empty and "data" in df_ab.columns:
-        df_ab["data_dt"] = pd.to_datetime(df_ab["data"], errors="coerce").dt.date
+
+        df_ab["data_dt"] = pd.to_datetime(df_ab["data"], errors="coerce")
 
         daf = df_ab[
-            (df_ab["data_dt"] >= d_ini) &
-            (df_ab["data_dt"] <= d_fim)
+            (df_ab["data_dt"].notna()) &
+            (df_ab["data_dt"].dt.date >= d_ini) &
+            (df_ab["data_dt"].dt.date <= d_fim)
         ]
 
         if not daf.empty:
-            if "total" in daf.columns:
-                t_gasto = pd.to_numeric(daf["total"], errors="coerce").sum()
+            t_gasto = pd.to_numeric(daf.get("total", 0), errors="coerce").sum()
+            t_litros = pd.to_numeric(daf.get("quantidade", 0), errors="coerce").sum()
 
-            if "quantidade" in daf.columns:
-                t_litros = pd.to_numeric(daf["quantidade"], errors="coerce").sum()
-
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
     # PRODUÇÃO
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
+
     if not df_prod.empty and "data" in df_prod.columns:
-        df_prod["data_dt"] = pd.to_datetime(df_prod["data"], errors="coerce").dt.date
+
+        df_prod["data_dt"] = pd.to_datetime(df_prod["data"], errors="coerce")
 
         dpf = df_prod[
-            (df_prod["data_dt"] >= d_ini) &
-            (df_prod["data_dt"] <= d_fim)
+            (df_prod["data_dt"].notna()) &
+            (df_prod["data_dt"].dt.date >= d_ini) &
+            (df_prod["data_dt"].dt.date <= d_fim)
         ]
 
         if not dpf.empty:
-            if "carradas" in dpf.columns:
-                t_carradas = pd.to_numeric(dpf["carradas"], errors="coerce").sum()
 
-            if "toneladas" in dpf.columns:
-                t_ton = pd.to_numeric(dpf["toneladas"], errors="coerce").sum()
+            t_carradas = pd.to_numeric(dpf.get("carradas", 0), errors="coerce").sum()
+            t_ton = pd.to_numeric(dpf.get("toneladas", 0), errors="coerce").sum()
 
-            if "tipo_operacao" in dpf.columns:
-                dc = dpf[dpf["tipo_operacao"].isin([
-                    "Transporte de Massa/CBUQ",
-                    "Venda de Massa"
-                ])]
+            dc = dpf[dpf.get("tipo_operacao", "").isin([
+                "Transporte de Massa/CBUQ",
+                "Venda de Massa"
+            ])]
 
-                if not dc.empty and "toneladas" in dc.columns:
-                    t_ton_cbuq = pd.to_numeric(dc["toneladas"], errors="coerce").sum()
+            if not dc.empty:
+                t_ton_cbuq = pd.to_numeric(dc.get("toneladas", 0), errors="coerce").sum()
 
-    # ═══════════════════════════════════════════════════════════════
-    # KPIs PRINCIPAIS
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
+    # KPIs
+    # ═══════════════════════════════════════════════
+
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.markdown(
-        f"<div class='kpi-box'><p>💰 Gasto Combustível</p><h3 class='kpi-rojo'>R$ {t_gasto:,.2f}</h3></div>",
-        unsafe_allow_html=True
-    )
+    c1.metric("💰 Gasto Combustível", f"R$ {t_gasto:,.2f}")
+    c2.metric("⛽ Litros", f"{t_litros:,.1f} L")
+    c3.metric("🏗️ Ton CBUQ", f"{t_ton_cbuq:,.1f} t")
+    c4.metric("🚚 Viagens", int(t_carradas))
 
-    c2.markdown(
-        f"<div class='kpi-box'><p>⛽ Litros Consumidos</p><h3>{t_litros:,.1f} L</h3></div>",
-        unsafe_allow_html=True
-    )
-
-    c3.markdown(
-        f"<div class='kpi-box'><p>🏗️ Ton CBUQ</p><h3>{t_ton_cbuq:,.1f} t</h3></div>",
-        unsafe_allow_html=True
-    )
-
-    c4.markdown(
-        f"<div class='kpi-box'><p>🚚 Viagens</p><h3>{int(t_carradas)}</h3></div>",
-        unsafe_allow_html=True
-    )
-
-    # ═══════════════════════════════════════════════════════════════
-    # KPIs DE EFICIÊNCIA
-    # ═══════════════════════════════════════════════════════════════
-    st.write("<br>", unsafe_allow_html=True)
-    st.markdown("#### ⚙️ KPIs de Eficiência Logística")
+    st.divider()
+    st.markdown("#### ⚙️ KPIs de Eficiência")
 
     c5, c6, c7 = st.columns(3)
 
@@ -654,54 +672,42 @@ if menu=="🏠 Painel Início":
     litros_ton = t_litros / t_ton_cbuq if t_ton_cbuq > 0 else 0
     litros_vg = t_litros / t_carradas if t_carradas > 0 else 0
 
-    c5.markdown(
-        f"<div class='kpi-box'><p>Custo Diesel / Ton CBUQ</p><h3 class='kpi-verde'>R$ {custo_ton:,.2f}</h3></div>",
-        unsafe_allow_html=True
-    )
+    c5.metric("Custo / Ton CBUQ", f"R$ {custo_ton:,.2f}")
+    c6.metric("Litros / Ton", f"{litros_ton:,.2f} L")
+    c7.metric("Litros / Viagem", f"{litros_vg:,.1f} L")
 
-    c6.markdown(
-        f"<div class='kpi-box'><p>Litros / Ton CBUQ</p><h3 class='kpi-verde'>{litros_ton:,.2f} L</h3></div>",
-        unsafe_allow_html=True
-    )
-
-    c7.markdown(
-        f"<div class='kpi-box'><p>Litros Médio / Viagem</p><h3 class='kpi-azul'>{litros_vg:,.1f} L</h3></div>",
-        unsafe_allow_html=True
-    )
-
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════
     # GRÁFICO
-    # ═══════════════════════════════════════════════════════════════
-    if not df_ab.empty and "data" in df_ab.columns and "total" in df_ab.columns:
-        df_ab["Mês"] = pd.to_datetime(df_ab["data"], errors="coerce").dt.strftime("%m/%Y")
-        df_ab["total_n"] = pd.to_numeric(df_ab["total"], errors="coerce").fillna(0)
+    # ═══════════════════════════════════════════════
 
-        g = df_ab.groupby("Mês")["total_n"].sum().reset_index()
+    if not df_ab.empty:
+
+        df_ab["data_dt"] = pd.to_datetime(df_ab["data"], errors="coerce")
+
+        df_filtrado = df_ab[
+            (df_ab["data_dt"].notna()) &
+            (df_ab["data_dt"].dt.date >= d_ini) &
+            (df_ab["data_dt"].dt.date <= d_fim)
+        ]
+
+        df_filtrado["Mês"] = df_filtrado["data_dt"].dt.strftime("%m/%Y")
+        df_filtrado["total_n"] = pd.to_numeric(df_filtrado.get("total", 0), errors="coerce").fillna(0)
+
+        g = df_filtrado.groupby("Mês")["total_n"].sum().reset_index()
 
         if not g.empty:
-            st.divider()
             st.subheader("📊 Gastos por Mês")
 
-            fig = px.bar(
-                g,
-                x="Mês",
-                y="total_n",
-                color_discrete_sequence=["#1D9E75"],
-                labels={"total_n": "R$ Total"}
-            )
-
-            fig.update_layout(
-                showlegend=False,
-                plot_bgcolor="white",
-                paper_bgcolor="white",
-                margin=dict(l=0, r=0, t=30, b=0)
-            )
-
+            fig = px.bar(g, x="Mês", y="total_n")
             st.plotly_chart(fig, use_container_width=True)
+
+
 # ════════════════════════════════════════════════════════════════════
 # 2 · LANÇAR ABASTECIMENTO
 # ════════════════════════════════════════════════════════════════════
-elif menu=="⛽ Lançar Abastecimento":
+
+elif menu == "⛽ Lançar Abastecimento":
+
     st.markdown("## ⛽ Lançar Saída de Combustível")
 
     df_v = get_data("veiculos")
@@ -710,41 +716,30 @@ elif menu=="⛽ Lançar Abastecimento":
     df_t = get_data("tanques")
 
     if df_v.empty:
-        st.warning("⚠️ Cadastre veículos primeiro.")
+        st.warning("Cadastre veículos primeiro.")
         st.stop()
 
-    # Proteções
-    if not df_a.empty:
-        if "status" not in df_a.columns:
-            df_a["status"] = "ATIVO"
-
-    v_sel = st.selectbox("🚜 Máquina / Equipamento", df_v["prefixo"].tolist())
+    v_sel = st.selectbox("🚜 Máquina", df_v["prefixo"].tolist())
     info_v = df_v[df_v["prefixo"] == v_sel].iloc[0]
 
     comb_padrao = info_v.get("tipo_combustivel_padrao", "Diesel S10")
     motorista_padrao = info_v.get("motorista", "")
     placa_padrao = info_v.get("placa", "")
 
-    m_hor = 0.0
+    m_hor = 0
     if not df_a.empty and "horimetro" in df_a.columns:
         hist = df_a[df_a["prefixo"] == v_sel]
         if not hist.empty:
             m_hor = float(pd.to_numeric(hist["horimetro"], errors="coerce").max() or 0)
 
-    st.markdown(f"""
-    <div class='banner-info'>
-    ⛽ Combustível: <strong>{comb_padrao}</strong> |
-    🪪 Placa: <strong>{placa_padrao}</strong> |
-    ⏱️ Último KM/Hor: <strong>{m_hor:,.1f}</strong>
-    </div>
-    """, unsafe_allow_html=True)
+    st.info(f"⛽ {comb_padrao} | 🪪 {placa_padrao} | ⏱️ Último KM/Hor: {m_hor:,.1f}")
 
     origem = st.radio("Origem:", ["Posto Externo", "Tanque Interno"], horizontal=True)
 
-    # ================= FORM =================
-    with st.form("f_ab", clear_on_submit=True):
+    with st.form("form_ab", clear_on_submit=True):
 
         c1, c2, c3 = st.columns(3)
+
         data_ab = c1.date_input("Data")
         ficha = c2.text_input("Ficha")
         motorista = c3.text_input("Motorista", value=motorista_padrao)
@@ -755,28 +750,26 @@ elif menu=="⛽ Lançar Abastecimento":
             posto = c4.selectbox("Fornecedor", df_f["nome"].tolist() if not df_f.empty else ["Sem cadastro"])
             n_tanq = None
         else:
-            n_tanq = c4.selectbox("Tanque", df_t["nome"].tolist())
+            n_tanq = c4.selectbox("Tanque", df_t["nome"].tolist() if not df_t.empty else [])
             posto = "Estoque Próprio"
 
         hor = c5.number_input("KM / Horímetro", value=m_hor)
         obs = c6.text_input("Observação")
 
         c7, c8 = st.columns(2)
+
         litros = c7.number_input("Litros", min_value=0.0)
         preco = c8.number_input("Preço (R$/L)", min_value=0.0)
 
         total = litros * preco
 
-        st.markdown(f"""
-        <div class='banner-info' style='text-align:center'>
-        💰 Total: <strong>R$ {total:,.2f}</strong>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info(f"💰 Total: R$ {total:,.2f}")
 
         if st.form_submit_button("💾 Salvar"):
 
             if litros <= 0:
-                st.error("⚠️ Litros inválido.")
+                st.error("Litros inválido")
+
             else:
 
                 dados = {
@@ -797,18 +790,23 @@ elif menu=="⛽ Lançar Abastecimento":
                     "status": "ATIVO"
                 }
 
-                ok = insert_data("abastecimentos", dados)
-
-                if ok:
-                    st.success("✅ Salvo!")
+                try:
+                    insert_data("abastecimentos", dados)
+                    st.success("Salvo com sucesso!")
                     st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
 
-    # ================= LISTAGEM =================
+    # ═══════════════════════════════════════════════
+    # LISTAGEM
+    # ═══════════════════════════════════════════════
+
     st.divider()
     st.subheader("📋 Abastecimentos")
 
     if df_a.empty:
         st.info("Nenhum registro.")
+
     else:
 
         df_a = df_a.sort_values("data", ascending=False).fillna("")
@@ -818,53 +816,41 @@ elif menu=="⛽ Lançar Abastecimento":
 
         tab1, tab2 = st.tabs(["✅ Ativos", "❌ Cancelados"])
 
-        # ===== ATIVOS =====
         with tab1:
             if ativos.empty:
                 st.info("Nenhum ativo.")
             else:
-                for _, r in ativos.head(20).iterrows():
+                for r in ativos.head(20).to_dict("records"):
+
                     c1, c2, c3 = st.columns([5,1,1])
 
-                    c1.markdown(
-                        f"📅 {r.get('data','')} | "
-                        f"🚜 {r.get('prefixo','')} | "
-                        f"⛽ {r.get('quantidade',0)} L | "
-                        f"💰 R$ {r.get('total',0):,.2f}"
+                    c1.write(
+                        f"📅 {r.get('data','')} | 🚜 {r.get('prefixo','')} | ⛽ {r.get('quantidade',0)} L | 💰 R$ {r.get('total',0):,.2f}"
                     )
 
                     if c2.button("✏️", key=f"edit_{r.get('id')}"):
-                        st.warning("Edição em breve")
+                        st.warning("Edição futura")
 
-                    if c3.button("❌", key=f"cancel_{r.get('id')}"):
-                        supabase.table("abastecimentos").update({
-                            "status": "CANCELADO"
-                        }).eq("id", r.get("id")).execute()
-
-                        st.warning("Cancelado!")
+                    if c3.button("❌", key=f"del_{r.get('id')}"):
+                        supabase.table("abastecimentos").update({"status":"CANCELADO"}).eq("id", r.get("id")).execute()
+                        st.warning("Cancelado")
                         st.rerun()
 
-        # ===== CANCELADOS =====
         with tab2:
             if cancelados.empty:
                 st.info("Nenhum cancelado.")
             else:
-                for _, r in cancelados.head(20).iterrows():
+                for r in cancelados.head(20).to_dict("records"):
+
                     c1, c2 = st.columns([5,1])
 
-                    c1.markdown(
-                        f"❌ {r.get('data','')} | "
-                        f"{r.get('prefixo','')} | "
-                        f"{r.get('quantidade',0)} L"
-                    )
+                    c1.write(f"❌ {r.get('data','')} | {r.get('prefixo','')} | {r.get('quantidade',0)} L")
 
                     if c2.button("↩️", key=f"restore_{r.get('id')}"):
-                        supabase.table("abastecimentos").update({
-                            "status": "ATIVO"
-                        }).eq("id", r.get("id")).execute()
-
-                        st.success("Restaurado!")
+                        supabase.table("abastecimentos").update({"status":"ATIVO"}).eq("id", r.get("id")).execute()
+                        st.success("Restaurado")
                         st.rerun()
+
 # ════════════════════════════════════════════════════════════════════
 # 3 · TANQUES / ESTOQUE
 # ════════════════════════════════════════════════════════════════════
