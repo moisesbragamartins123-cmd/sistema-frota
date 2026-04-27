@@ -502,9 +502,8 @@ if menu == "🏠 Painel Início":
             with cols_t[idx % len(cols_t)]:
                 st.markdown(f"<div class='{cls}'>{ic} <strong>{nm}</strong><br>{sd:,.1f} L{pct}</div>", unsafe_allow_html=True)
                 if cap > 0:
-                    if alguma_coisa_aqui: # Esta é a sua linha 504
-                        valor_barra = max(0.0, min(sd / cap, 1.0)) if cap > 0 else 0.0
-                        st.progress(valor_barra)
+                    valor_barra = max(0.0, min(sd / cap, 1.0)) if cap > 0 else 0.0
+                    st.progress(valor_barra)
                   
 
     # FILTRO PERÍODO
