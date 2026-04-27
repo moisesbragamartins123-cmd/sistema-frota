@@ -729,8 +729,47 @@ elif menu == "⛽ Lançar Abastecimento":
 # ════════════════════════════════════════════════════════════════════
 elif menu=="🛢️ Tanques / Estoque":
     st.markdown("## 🛢️ Gestão de Tanques e Comboios")
+    
+    # 1. CARREGAR DADOS
+    df_t=get_data("tanques")
+    df_f=get_data("fornecedores")
+    df_ent=get_data("entradas_tanque")
+    df_sai=get_data("abastecimentos") # ⚠️ Altere aqui se o nome da sua tabela de saídas for diferente
+    
+    # 2. PAINEL DE SALDO (Com a correção anti-NaN)
+    if not df_t.empty:
+        st.markdown("### 📊 Visão Geral do Estoque")
+        tanque_selecionado = st.selectbox("Selecione o Tanque/Comboio:", df_t["nome"].tolist())
+        
+        # Filtra os dados apenas para o tanque selecionado
+        df_ent_filtrado = df_ent[df_ent["nome_tanque"] == tanque_selecionado] if not df_ent.empty else pd.DataFrame()
+        # Aqui, verifique se a coluna que indica de onde saiu o combustível se chama 'nome_tanque' na tabela de abastecimentos
+        df_sai_filtrado = df_sai[df_sai["nome_tanque"] == tanque_selecionado] if not df_sai.empty else pd.DataFrame()
+        
+        # Cálculos seguros
+        if 'quantidade' in df_ent_filtrado.columns and not df_ent_filtrado.empty:
+            df_ent_filtrado['quantidade'] = pd.to_numeric(df_ent_filtrado['quantidade'], errors='coerce').fillna(0)
+            tot_ent = df_ent_filtrado['quantidade'].sum()
+        else:
+            tot_ent = 0.0
+
+        if 'quantidade' in df_sai_filtrado.columns and not df_sai_filtrado.empty:
+            df_sai_filtrado['quantidade'] = pd.to_numeric(df_sai_filtrado['quantidade'], errors='coerce').fillna(0)
+            tot_sai = df_sai_filtrado['quantidade'].sum()
+        else:
+            tot_sai = 0.0
+
+        saldo_atual = tot_ent - tot_sai
+        
+        # Mostra os indicadores na tela
+        c_ent, c_sai, c_sal = st.columns(3)
+        c_ent.metric("📥 Total de Entradas", f"{tot_ent:,.1f} L")
+        c_sai.metric("📤 Total de Saídas", f"{tot_sai:,.1f} L")
+        c_sal.metric("⛽ SALDO ATUAL", f"{saldo_atual:,.1f} L")
+        st.markdown("---")
+
+    # 3. ABAS DE LANÇAMENTO E CADASTRO
     tab1,tab2=st.tabs(["➕ Lançar Entrada de Combustível","📋 Cadastrar Novo Tanque"])
-    df_t=get_data("tanques"); df_f=get_data("fornecedores"); df_ent=get_data("entradas_tanque")
     
     with tab1:
         if df_t.empty: st.warning("Cadastre um tanque primeiro.")
@@ -757,6 +796,7 @@ elif menu=="🛢️ Tanques / Estoque":
                 cols_ent = ["data","numero_ficha","fornecedor","nome_tanque","combustivel","quantidade","valor_unitario","total","criado_por"]
                 cols_presentes = [c for c in cols_ent if c in df_e_rec.columns]
                 st.dataframe(df_e_rec[cols_presentes],use_container_width=True)
+                
     with tab2:
         with st.form("f_t",clear_on_submit=True):
             nm_t=st.text_input("Nome do Tanque/Comboio")
@@ -773,7 +813,6 @@ elif menu=="🛢️ Tanques / Estoque":
                 cc1.write(f"**{r['nome']}** — Capacidade: {r.get('capacidade',0):.0f}L")
                 if cc2.button("❌",key=f"d_t_{r['id']}"):
                     if delete_data("tanques",r["id"]): st.rerun()
-
 # ════════════════════════════════════════════════════════════════════
 # 4 · BOLETIM DE TRANSPORTE E PRODUÇÃO
 # ════════════════════════════════════════════════════════════════════
