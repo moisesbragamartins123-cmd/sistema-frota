@@ -386,69 +386,131 @@ def gerar_pdf(df: pd.DataFrame, tipo: str, titulo_esq: str, sub_esq: str, per_es
 for k,v in [("logged_in",False),("usuario_logado",""),("perfil_logado","")]:
     if k not in st.session_state: st.session_state[k]=v
 
+import psutil
+
 if not st.session_state.logged_in:
     st.markdown("""
     <style>
     [data-testid="stAppViewContainer"] {
-        background: linear-gradient(rgba(15, 25, 35, 0.7), rgba(15, 25, 35, 0.7)), url('https://images.unsplash.com/photo-1463171379579-3fdfb86d6285?q=80&w=2070') no-repeat center center fixed !important;
+        background: linear-gradient(rgba(15, 25, 35, 0.7), rgba(15, 25, 35, 0.7)), 
+        url('https://images.unsplash.com/photo-1463171379579-3fdfb86d6285?q=80&w=2070') 
+        no-repeat center center fixed !important;
         background-size: cover !important;
     }
+
     [data-testid="stHeader"] { background: transparent !important; }
-    [data-testid="stSidebar"] { display: none; } 
+    [data-testid="stSidebar"] { display: none; }
+
+    /* 🔥 REMOVE ESPAÇOS EXAGERADOS */
+    div[data-testid="stForm"] {
+        margin-top: -40px;
+    }
+
+    img {
+        margin-bottom: -15px;
+    }
     </style>
     """, unsafe_allow_html=True)
     
-    st.write("<br><br><br>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([1, 1.2, 1])
+    # 🔥 MENOS ESPAÇO NO TOPO
+    st.write("<br>", unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns([1, 2.5, 1])
+
     with c2:
         with st.form("login"):
             if os.path.exists("logo.png"): 
                 col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
                 with col_l2:
-                    st.image("logo.png", width=260)
+                    st.image("logo.png", width=280)
+                    st.markdown("<div style='margin-top:-25px'></div>", unsafe_allow_html=True)
             
-            st.markdown("<h2 style='text-align:center;color:#1E293B;font-weight:700;margin-bottom:1.5rem;'>Acesso Restrito</h2>", unsafe_allow_html=True)
+            st.markdown("""
+            <h2 style='text-align:center;
+                       color:#1E293B;
+                       font-weight:700;
+                       margin-top:0;
+                       margin-bottom:0.3rem;'>
+                Acesso Restrito
+            </h2>
+            """, unsafe_allow_html=True)
+
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
             
             st.write("<br>", unsafe_allow_html=True)
+
             if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
                 try:
-                    res=supabase.table("usuarios").select("*").eq("login",u).eq("senha",p).execute()
+                    res = supabase.table("usuarios").select("*").eq("login", u).eq("senha", p).execute()
                     if res.data:
-                        st.session_state.logged_in=True
-                        st.session_state.usuario_logado=res.data[0]["nome"]
-                        st.session_state.perfil_logado=res.data[0]["perfil"]
+                        st.session_state.logged_in = True
+                        st.session_state.usuario_logado = res.data[0]["nome"]
+                        st.session_state.perfil_logado = res.data[0]["perfil"]
                         st.rerun()
-                    else: st.error("❌ Usuário ou senha incorretos.")
+                    else:
+                        st.error("❌ Usuário ou senha incorretos.")
                 except:
-                    if u==st.secrets.get("ADMIN_USER","admin") and p==st.secrets.get("ADMIN_PASS","obra2026"):
-                        st.session_state.logged_in=True; st.session_state.usuario_logado="Admin"; st.session_state.perfil_logado="Admin"; st.rerun()
-                    else: st.error("❌ Usuário ou senha incorretos.")
+                    if u == st.secrets.get("ADMIN_USER", "admin") and p == st.secrets.get("ADMIN_PASS", "obra2026"):
+                        st.session_state.logged_in = True
+                        st.session_state.usuario_logado = "Admin"
+                        st.session_state.perfil_logado = "Admin"
+                        st.rerun()
+                    else:
+                        st.error("❌ Usuário ou senha incorretos.")
+
     st.stop()
+
 
 # ═══════════════════════════════════════════════════════════════════
 # SIDEBAR
 # ═══════════════════════════════════════════════════════════════════
 with st.sidebar:
     if os.path.exists("logo.png"):
-        c1,c2,c3=st.columns([1,2,1])
-        with c2: st.image("logo.png", width=300)
-    st.markdown(f"<div style='text-align:center;color:#1D9E75;font-size:13px;font-weight:bold;'>👤 {st.session_state.usuario_logado}</div>",unsafe_allow_html=True)
-    st.divider()
-    
-    # OPÇÃO 'OBRAS CADASTRADAS' REMOVIDA AQUI:
-    opcoes=["🏠 Painel Início","⛽ Lançar Abastecimento","🛢️ Tanques / Estoque",
-            "🚚 Boletim de Transporte","🚜 Frota e Equipamentos",
-            "🏪 Fornecedores","📋 Relatórios e Fechamentos"]
-            
-    if st.session_state.perfil_logado=="Admin": opcoes.append("👥 Usuários e Acessos")
-    menu=st.sidebar.radio("",opcoes,label_visibility="collapsed")
-    st.divider()
-    if st.button("🚪 Sair",use_container_width=True):
-        st.session_state.logged_in=False; st.session_state.usuario_logado=""; st.session_state.perfil_logado=""; st.rerun()
-    st.caption("☁️ Supabase — Tempo Real")
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            st.image("logo.png", width=220)
 
+    st.markdown(
+        f"<div style='text-align:center;color:#1D9E75;font-size:13px;font-weight:bold;'>👤 {st.session_state.usuario_logado}</div>",
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+    # 🔐 BOTÃO SAIR
+    if st.button("🚪 Sair", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.usuario_logado = ""
+        st.session_state.perfil_logado = ""
+        st.rerun()
+
+    # 💾 MEMÓRIA
+    mem = psutil.virtual_memory()
+    st.markdown(
+        f"<div style='text-align:center;font-size:12px;'>💾 Memória: <b>{mem.percent}%</b></div>",
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+    opcoes = [
+        "🏠 Painel Início",
+        "⛽ Lançar Abastecimento",
+        "🛢️ Tanques / Estoque",
+        "🚚 Boletim de Transporte",
+        "🚜 Frota e Equipamentos",
+        "🏪 Fornecedores",
+        "📋 Relatórios e Fechamentos"
+    ]
+            
+    if st.session_state.perfil_logado == "Admin":
+        opcoes.append("👥 Usuários e Acessos")
+
+    menu = st.sidebar.radio("", opcoes, label_visibility="collapsed")
+
+    st.divider()
+    st.caption("☁️ Supabase — Tempo Real")
 # ════════════════════════════════════════════════════════════════════
 # 1 · PAINEL INÍCIO
 # ════════════════════════════════════════════════════════════════════
