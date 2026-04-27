@@ -403,7 +403,7 @@ if not st.session_state.logged_in:
     with c2:
         with st.form("login"):
             if os.path.exists("logo.png"): 
-                col_l1, col_l2, col_l3 = st.columns([1, 1.5, 1])
+                col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
                 with col_l2:
                     st.image("logo.png", width=260)
             
@@ -433,7 +433,7 @@ if not st.session_state.logged_in:
 with st.sidebar:
     if os.path.exists("logo.png"):
         c1,c2,c3=st.columns([1,2,1])
-        with c2: st.image("logo.png",use_container_width=True)
+        with c2: st.image("logo.png", width=180)
     st.markdown(f"<div style='text-align:center;color:#1D9E75;font-size:13px;font-weight:bold;'>👤 {st.session_state.usuario_logado}</div>",unsafe_allow_html=True)
     st.divider()
     
