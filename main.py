@@ -96,13 +96,14 @@ def get_supabase():
 supabase = get_supabase()
 
 @st.cache_data(ttl=60) # Mantemos cache para performance, mas vamos limpá-lo na inserção
-def get_data(table: str) -> pd.DataFrame:
+def delete_data(table: str, row_id) -> bool:
     try:
-        res = supabase.table(table).select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+        supabase.table(table).delete().eq("id", row_id).execute()
+        # Remova o get_data.clear() que tínhamos colocado, já não precisamos dele!
+        return True
     except Exception as e:
-        st.warning(f"⚠️ Erro ao buscar {table}: {e}")
-        return pd.DataFrame()
+        st.error(f"❌ Erro ao excluir: {e}")
+        return False
 
 def insert_data(table: str, data: dict) -> bool:
     try:
