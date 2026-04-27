@@ -515,66 +515,189 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════════════
 if menu=="🏠 Painel Início":
     st.markdown("## 🏠 Centro de Comando")
-    df_tanq=get_data("tanques"); df_ab=get_data("abastecimentos"); df_prod=get_data("producao")
 
+    # 🔄 FUNÇÃO SEM CACHE (DADOS SEMPRE ATUALIZADOS)
+    def get_data(tabela):
+        res = supabase.table(tabela).select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+
+    df_tanq = get_data("tanques")
+    df_ab   = get_data("abastecimentos")
+    df_prod = get_data("producao")
+
+    # ═══════════════════════════════════════════════════════════════
+    # TANQUES
+    # ═══════════════════════════════════════════════════════════════
     if not df_tanq.empty:
         st.subheader("🛢️ Situação dos Tanques / Comboios")
-        cols_t=st.columns(min(len(df_tanq),5))
-        for idx,row in df_tanq.iterrows():
-            nm=row["nome"]; cap=float(row.get("capacidade",0) or 0)
-            sd=calcular_saldo(nm); lim=(cap*0.15) if cap>0 else 500
-            with cols_t[idx%len(cols_t)]:
-                low=sd<=lim; cls="banner-low" if low else "banner-ok"; ic="⚠️" if low else "✅"
-                pct_txt=f" / {sd/cap*100:.0f}%" if cap>0 else ""
-                st.markdown(f"<div class='{cls}'>{ic} <strong>{nm}</strong><br>{sd:,.1f} L{pct_txt}</div>",unsafe_allow_html=True)
-                if cap>0: st.progress(min(sd/cap,1.0))
+        cols_t = st.columns(min(len(df_tanq), 5))
+
+        for idx, row in df_tanq.iterrows():
+            nm = row["nome"]
+            cap = float(row.get("capacidade", 0) or 0)
+            sd = calcular_saldo(nm)
+            lim = (cap * 0.15) if cap > 0 else 500
+
+            with cols_t[idx % len(cols_t)]:
+                low = sd <= lim
+                cls = "banner-low" if low else "banner-ok"
+                ic  = "⚠️" if low else "✅"
+                pct_txt = f" / {sd/cap*100:.0f}%" if cap > 0 else ""
+
+                st.markdown(
+                    f"<div class='{cls}'>{ic} <strong>{nm}</strong><br>{sd:,.1f} L{pct_txt}</div>",
+                    unsafe_allow_html=True
+                )
+
+                if cap > 0:
+                    st.progress(min(sd/cap, 1.0))
+
         st.divider()
 
+    # ═══════════════════════════════════════════════════════════════
+    # FILTRO DE PERÍODO
+    # ═══════════════════════════════════════════════════════════════
     st.markdown("#### 📅 Indicadores do Período")
-    cd1,cd2=st.columns(2)
-    d_ini=cd1.date_input("De",value=date.today().replace(day=1))
-    d_fim=cd2.date_input("Até",value=date.today())
 
-    t_gasto=0;t_litros=0;t_carradas=0;t_ton=0;t_ton_cbuq=0
-    if not df_ab.empty:
-        df_ab["data_dt"]=pd.to_datetime(df_ab["data"],errors="coerce").dt.date
-        daf=df_ab[(df_ab["data_dt"]>=d_ini)&(df_ab["data_dt"]<=d_fim)]
-        t_gasto=pd.to_numeric(daf.get("total",pd.Series()),errors="coerce").sum()
-        t_litros=pd.to_numeric(daf.get("quantidade",pd.Series()),errors="coerce").sum()
-    if not df_prod.empty:
-        df_prod["data_dt"]=pd.to_datetime(df_prod["data"],errors="coerce").dt.date
-        dpf=df_prod[(df_prod["data_dt"]>=d_ini)&(df_prod["data_dt"]<=d_fim)]
-        t_carradas=pd.to_numeric(dpf.get("carradas",pd.Series()),errors="coerce").sum()
-        t_ton=pd.to_numeric(dpf.get("toneladas",pd.Series()),errors="coerce").sum()
-        if "tipo_operacao" in dpf.columns:
-            dc=dpf[dpf["tipo_operacao"].isin(["Transporte de Massa/CBUQ","Venda de Massa"])]
-            t_ton_cbuq=pd.to_numeric(dc.get("toneladas",pd.Series()),errors="coerce").sum()
+    cd1, cd2 = st.columns(2)
+    d_ini = cd1.date_input("De", value=date.today().replace(day=1))
+    d_fim = cd2.date_input("Até", value=date.today())
 
-    c1,c2,c3,c4=st.columns(4)
-    c1.markdown(f"<div class='kpi-box'><p>💰 Gasto Combustível</p><h3 class='kpi-rojo'>R$ {t_gasto:,.2f}</h3></div>",unsafe_allow_html=True)
-    c2.markdown(f"<div class='kpi-box'><p>⛽ Litros Consumidos</p><h3>{t_litros:,.1f} L</h3></div>",unsafe_allow_html=True)
-    c3.markdown(f"<div class='kpi-box'><p>🏗️ Ton CBUQ</p><h3>{t_ton_cbuq:,.1f} t</h3></div>",unsafe_allow_html=True)
-    c4.markdown(f"<div class='kpi-box'><p>🚚 Viagens</p><h3>{int(t_carradas)}</h3></div>",unsafe_allow_html=True)
+    # ═══════════════════════════════════════════════════════════════
+    # INICIALIZAÇÃO SEGURA
+    # ═══════════════════════════════════════════════════════════════
+    t_gasto = 0
+    t_litros = 0
+    t_carradas = 0
+    t_ton = 0
+    t_ton_cbuq = 0
 
-    st.write("<br>",unsafe_allow_html=True)
+    # ═══════════════════════════════════════════════════════════════
+    # ABASTECIMENTOS
+    # ═══════════════════════════════════════════════════════════════
+    if not df_ab.empty and "data" in df_ab.columns:
+        df_ab["data_dt"] = pd.to_datetime(df_ab["data"], errors="coerce").dt.date
+
+        daf = df_ab[
+            (df_ab["data_dt"] >= d_ini) &
+            (df_ab["data_dt"] <= d_fim)
+        ]
+
+        if not daf.empty:
+            if "total" in daf.columns:
+                t_gasto = pd.to_numeric(daf["total"], errors="coerce").sum()
+
+            if "quantidade" in daf.columns:
+                t_litros = pd.to_numeric(daf["quantidade"], errors="coerce").sum()
+
+    # ═══════════════════════════════════════════════════════════════
+    # PRODUÇÃO
+    # ═══════════════════════════════════════════════════════════════
+    if not df_prod.empty and "data" in df_prod.columns:
+        df_prod["data_dt"] = pd.to_datetime(df_prod["data"], errors="coerce").dt.date
+
+        dpf = df_prod[
+            (df_prod["data_dt"] >= d_ini) &
+            (df_prod["data_dt"] <= d_fim)
+        ]
+
+        if not dpf.empty:
+            if "carradas" in dpf.columns:
+                t_carradas = pd.to_numeric(dpf["carradas"], errors="coerce").sum()
+
+            if "toneladas" in dpf.columns:
+                t_ton = pd.to_numeric(dpf["toneladas"], errors="coerce").sum()
+
+            if "tipo_operacao" in dpf.columns:
+                dc = dpf[dpf["tipo_operacao"].isin([
+                    "Transporte de Massa/CBUQ",
+                    "Venda de Massa"
+                ])]
+
+                if not dc.empty and "toneladas" in dc.columns:
+                    t_ton_cbuq = pd.to_numeric(dc["toneladas"], errors="coerce").sum()
+
+    # ═══════════════════════════════════════════════════════════════
+    # KPIs PRINCIPAIS
+    # ═══════════════════════════════════════════════════════════════
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.markdown(
+        f"<div class='kpi-box'><p>💰 Gasto Combustível</p><h3 class='kpi-rojo'>R$ {t_gasto:,.2f}</h3></div>",
+        unsafe_allow_html=True
+    )
+
+    c2.markdown(
+        f"<div class='kpi-box'><p>⛽ Litros Consumidos</p><h3>{t_litros:,.1f} L</h3></div>",
+        unsafe_allow_html=True
+    )
+
+    c3.markdown(
+        f"<div class='kpi-box'><p>🏗️ Ton CBUQ</p><h3>{t_ton_cbuq:,.1f} t</h3></div>",
+        unsafe_allow_html=True
+    )
+
+    c4.markdown(
+        f"<div class='kpi-box'><p>🚚 Viagens</p><h3>{int(t_carradas)}</h3></div>",
+        unsafe_allow_html=True
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # KPIs DE EFICIÊNCIA
+    # ═══════════════════════════════════════════════════════════════
+    st.write("<br>", unsafe_allow_html=True)
     st.markdown("#### ⚙️ KPIs de Eficiência Logística")
-    c5,c6,c7=st.columns(3)
-    custo_ton=t_gasto/t_ton_cbuq if t_ton_cbuq>0 else 0
-    litros_ton=t_litros/t_ton_cbuq if t_ton_cbuq>0 else 0
-    litros_vg=t_litros/t_carradas if t_carradas>0 else 0
-    c5.markdown(f"<div class='kpi-box'><p>Custo Diesel / Ton CBUQ</p><h3 class='kpi-verde'>R$ {custo_ton:,.2f}</h3></div>",unsafe_allow_html=True)
-    c6.markdown(f"<div class='kpi-box'><p>Litros / Ton CBUQ</p><h3 class='kpi-verde'>{litros_ton:,.2f} L</h3></div>",unsafe_allow_html=True)
-    c7.markdown(f"<div class='kpi-box'><p>Litros Médio / Viagem</p><h3 class='kpi-azul'>{litros_vg:,.1f} L</h3></div>",unsafe_allow_html=True)
 
-    if not df_ab.empty:
-        st.divider(); st.subheader("📊 Gastos por Mês")
-        df_ab["Mês"]=pd.to_datetime(df_ab["data"],errors="coerce").dt.strftime("%m/%Y")
-        df_ab["total_n"]=pd.to_numeric(df_ab["total"],errors="coerce").fillna(0)
-        g=df_ab.groupby("Mês")["total_n"].sum().reset_index()
-        fig=px.bar(g,x="Mês",y="total_n",color_discrete_sequence=["#1D9E75"],labels={"total_n":"R$ Total"})
-        fig.update_layout(showlegend=False,plot_bgcolor="white",paper_bgcolor="white",margin=dict(l=0,r=0,t=30,b=0))
-        st.plotly_chart(fig,use_container_width=True)
+    c5, c6, c7 = st.columns(3)
 
+    custo_ton = t_gasto / t_ton_cbuq if t_ton_cbuq > 0 else 0
+    litros_ton = t_litros / t_ton_cbuq if t_ton_cbuq > 0 else 0
+    litros_vg = t_litros / t_carradas if t_carradas > 0 else 0
+
+    c5.markdown(
+        f"<div class='kpi-box'><p>Custo Diesel / Ton CBUQ</p><h3 class='kpi-verde'>R$ {custo_ton:,.2f}</h3></div>",
+        unsafe_allow_html=True
+    )
+
+    c6.markdown(
+        f"<div class='kpi-box'><p>Litros / Ton CBUQ</p><h3 class='kpi-verde'>{litros_ton:,.2f} L</h3></div>",
+        unsafe_allow_html=True
+    )
+
+    c7.markdown(
+        f"<div class='kpi-box'><p>Litros Médio / Viagem</p><h3 class='kpi-azul'>{litros_vg:,.1f} L</h3></div>",
+        unsafe_allow_html=True
+    )
+
+    # ═══════════════════════════════════════════════════════════════
+    # GRÁFICO
+    # ═══════════════════════════════════════════════════════════════
+    if not df_ab.empty and "data" in df_ab.columns and "total" in df_ab.columns:
+        df_ab["Mês"] = pd.to_datetime(df_ab["data"], errors="coerce").dt.strftime("%m/%Y")
+        df_ab["total_n"] = pd.to_numeric(df_ab["total"], errors="coerce").fillna(0)
+
+        g = df_ab.groupby("Mês")["total_n"].sum().reset_index()
+
+        if not g.empty:
+            st.divider()
+            st.subheader("📊 Gastos por Mês")
+
+            fig = px.bar(
+                g,
+                x="Mês",
+                y="total_n",
+                color_discrete_sequence=["#1D9E75"],
+                labels={"total_n": "R$ Total"}
+            )
+
+            fig.update_layout(
+                showlegend=False,
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                margin=dict(l=0, r=0, t=30, b=0)
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
 # ════════════════════════════════════════════════════════════════════
 # 2 · LANÇAR ABASTECIMENTO
 # ════════════════════════════════════════════════════════════════════
