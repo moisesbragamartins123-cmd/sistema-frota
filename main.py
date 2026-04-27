@@ -378,7 +378,12 @@ def gerar_pdf(df: pd.DataFrame, tipo: str, titulo_esq: str, sub_esq: str, per_es
     elif tipo=="TANQUE":
         pdf.cell(138,8,"TOTAIS",border=1,align="R"); pdf.cell(17,8,f"{t_l:,.2f}",border=1,align="R")
         pdf.cell(14,8,"-",border=1,align="C"); pdf.cell(13,8,"-",border=1,align="C")
-        pdf.cell(15
+        pdf.cell(15,8,f"R$ {t_r:,.2f}",border=1,align="R"); pdf.cell(14,8,f"{saldo:,.1f}",border=1,align="R"); pdf.cell(37,8,"",border=1)
+    else:
+        pdf.cell(167,8,"TOTAIS GERAIS",border=1,align="R"); pdf.cell(20,8,f"{t_l:,.2f}",border=1,align="R")
+        pdf.cell(20,8,"-",border=1,align="C"); pdf.cell(23,8,f"R$ {t_r:,.2f}",border=1,align="R"); pdf.cell(30,8,"",border=1)
+
+    return pdf.output(dest="S").encode("latin-1")
 # ═══════════════════════════════════════════════════════════════════
 # LOGIN
 # ═══════════════════════════════════════════════════════════════════
