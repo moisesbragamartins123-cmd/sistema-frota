@@ -519,71 +519,168 @@ if menu=="🏠 Painel Início":
 # ════════════════════════════════════════════════════════════════════
 elif menu=="⛽ Lançar Abastecimento":
     st.markdown("## ⛽ Lançar Saída de Combustível")
-    df_v=get_data("veiculos"); df_f=get_data("fornecedores"); df_a=get_data("abastecimentos"); df_t=get_data("tanques")
 
-    if df_v.empty: st.warning("⚠️ Cadastre veículos em 'Frota e Equipamentos' primeiro."); st.stop()
+    df_v = get_data("veiculos")
+    df_f = get_data("fornecedores")
+    df_a = get_data("abastecimentos")
+    df_t = get_data("tanques")
 
-    v_sel=st.selectbox("🚜 Máquina / Caçamba",df_v["prefixo"].tolist())
-    info_v=df_v[df_v["prefixo"]==v_sel].iloc[0]
-    comb_padrao=info_v.get("tipo_combustivel_padrao","Diesel S10")
-    motorista_padrao=info_v.get("motorista","")
-    placa_padrao=info_v.get("placa","")
+    if df_v.empty:
+        st.warning("⚠️ Cadastre veículos primeiro.")
+        st.stop()
 
-    m_hor=0.0
-    if not df_a.empty and "horimetro" in df_a.columns:
-        hist=df_a[df_a["prefixo"]==v_sel]
-        if not hist.empty: m_hor=float(pd.to_numeric(hist["horimetro"],errors="coerce").max() or 0)
-
-    st.markdown(f"<div class='banner-info'>⛽ Combustível: <strong>{comb_padrao}</strong>  |  🪪 Placa: <strong>{placa_padrao}</strong>  |  ⏱️ Último KM/Hor: <strong>{m_hor:,.1f}</strong></div>",unsafe_allow_html=True)
-    origem=st.radio("Origem do Combustível:",["Posto Externo","Tanque Interno"],horizontal=True)
-
-    with st.form("f_ab",clear_on_submit=True):
-        st.markdown("#### 👤 Dados do Motorista e Veículo")
-        c1,c2,c3=st.columns(3)
-        data_ab=c1.date_input("Data",value=date.today())
-        ficha=c2.text_input("Nº Ficha / Cupom")
-        motorista=c3.text_input("Motorista / Operador",value=motorista_padrao)
-        
-        st.markdown("#### ⛽ Dados do Abastecimento")
-        c4,c5,c6 = st.columns(3)
-        if origem=="Posto Externo":
-            postos=df_f["nome"].tolist() if not df_f.empty else ["Sem cadastro"]
-            posto=c4.selectbox("Posto Fornecedor",postos); n_tanq=None
-        else:
-            tanqs=df_t["nome"].tolist() if not df_t.empty else ["Sem cadastro"]
-            n_tanq=c4.selectbox("Tanque de Origem",tanqs); posto="Estoque Próprio"
-        
-        hor=c5.number_input("KM / Horímetro Atual",min_value=0.0,value=m_hor)
-        obs=c6.text_input("Observações / Obra")
-        
-        c7,c8=st.columns(2)
-        litros=c7.number_input("Litros",min_value=0.0)
-        preco=c8.number_input("Preço Unitário (R$/L)",min_value=0.0)
-        
-        st.write("<br>", unsafe_allow_html=True)
-        st.markdown(f"<div class='banner-info' style='text-align: center; font-size: 16px;'>Total calculado: <strong>R$ {litros*preco:,.2f}</strong></div>",unsafe_allow_html=True)
-
-        if st.form_submit_button("💾 Salvar Abastecimento",use_container_width=True):
-            if litros<=0: st.error("⚠️ Litros devem ser maior que zero.")
-            elif origem=="Tanque Interno":
-                sd=calcular_saldo(n_tanq)
-                if litros>sd: st.error(f"⚠️ Saldo insuficiente! Disponível: {sd:,.1f} L | Solicitado: {litros:,.1f} L")
-                else:
-                    ok=insert_data("abastecimentos",{"data":str(data_ab),"dia_semana":dia_semana_pt(data_ab),"numero_ficha":ficha,"origem":origem,"nome_tanque":n_tanq,"prefixo":v_sel,"placa":placa_padrao,"motorista":motorista.upper(),"tipo_combustivel":comb_padrao,"quantidade":litros,"valor_unitario":preco,"total":litros*preco,"fornecedor":posto,"horimetro":hor,"observacao":obs,"criado_por":st.session_state.usuario_logado})
-                    if ok: st.success("✅ Salvo!"); time.sleep(1); st.rerun()
-            else:
-                ok=insert_data("abastecimentos",{"data":str(data_ab),"dia_semana":dia_semana_pt(data_ab),"numero_ficha":ficha,"origem":origem,"nome_tanque":None,"prefixo":v_sel,"placa":placa_padrao,"motorista":motorista.upper(),"tipo_combustivel":comb_padrao,"quantidade":litros,"valor_unitario":preco,"total":litros*preco,"fornecedor":posto,"horimetro":hor,"observacao":obs,"criado_por":st.session_state.usuario_logado})
-                if ok: st.success("✅ Salvo!"); time.sleep(1); st.rerun()
-
+    # Proteções
     if not df_a.empty:
-        st.divider(); st.subheader("📋 Últimos 20 Abastecimentos")
-        df_rec=df_a.sort_values("data",ascending=False).head(20).fillna("")
-        
-        # Correção segura para tabelas: só tenta exibir colunas que existem no banco
-        colunas_ab = ["data","dia_semana","numero_ficha","placa","prefixo","motorista","fornecedor","tipo_combustivel","quantidade","valor_unitario","total","horimetro","observacao","criado_por"]
-        cols_presentes = [c for c in colunas_ab if c in df_rec.columns]
-        st.dataframe(df_rec[cols_presentes],use_container_width=True)
+        if "status" not in df_a.columns:
+            df_a["status"] = "ATIVO"
 
+    v_sel = st.selectbox("🚜 Máquina / Equipamento", df_v["prefixo"].tolist())
+    info_v = df_v[df_v["prefixo"] == v_sel].iloc[0]
+
+    comb_padrao = info_v.get("tipo_combustivel_padrao", "Diesel S10")
+    motorista_padrao = info_v.get("motorista", "")
+    placa_padrao = info_v.get("placa", "")
+
+    m_hor = 0.0
+    if not df_a.empty and "horimetro" in df_a.columns:
+        hist = df_a[df_a["prefixo"] == v_sel]
+        if not hist.empty:
+            m_hor = float(pd.to_numeric(hist["horimetro"], errors="coerce").max() or 0)
+
+    st.markdown(f"""
+    <div class='banner-info'>
+    ⛽ Combustível: <strong>{comb_padrao}</strong> |
+    🪪 Placa: <strong>{placa_padrao}</strong> |
+    ⏱️ Último KM/Hor: <strong>{m_hor:,.1f}</strong>
+    </div>
+    """, unsafe_allow_html=True)
+
+    origem = st.radio("Origem:", ["Posto Externo", "Tanque Interno"], horizontal=True)
+
+    # ================= FORM =================
+    with st.form("f_ab", clear_on_submit=True):
+
+        c1, c2, c3 = st.columns(3)
+        data_ab = c1.date_input("Data")
+        ficha = c2.text_input("Ficha")
+        motorista = c3.text_input("Motorista", value=motorista_padrao)
+
+        c4, c5, c6 = st.columns(3)
+
+        if origem == "Posto Externo":
+            posto = c4.selectbox("Fornecedor", df_f["nome"].tolist() if not df_f.empty else ["Sem cadastro"])
+            n_tanq = None
+        else:
+            n_tanq = c4.selectbox("Tanque", df_t["nome"].tolist())
+            posto = "Estoque Próprio"
+
+        hor = c5.number_input("KM / Horímetro", value=m_hor)
+        obs = c6.text_input("Observação")
+
+        c7, c8 = st.columns(2)
+        litros = c7.number_input("Litros", min_value=0.0)
+        preco = c8.number_input("Preço (R$/L)", min_value=0.0)
+
+        total = litros * preco
+
+        st.markdown(f"""
+        <div class='banner-info' style='text-align:center'>
+        💰 Total: <strong>R$ {total:,.2f}</strong>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.form_submit_button("💾 Salvar"):
+
+            if litros <= 0:
+                st.error("⚠️ Litros inválido.")
+            else:
+
+                dados = {
+                    "data": str(data_ab),
+                    "numero_ficha": ficha,
+                    "origem": origem,
+                    "nome_tanque": n_tanq,
+                    "prefixo": v_sel,
+                    "placa": placa_padrao,
+                    "motorista": motorista.upper(),
+                    "tipo_combustivel": comb_padrao,
+                    "quantidade": litros,
+                    "valor_unitario": preco,
+                    "total": total,
+                    "fornecedor": posto,
+                    "horimetro": hor,
+                    "observacao": obs,
+                    "status": "ATIVO"
+                }
+
+                ok = insert_data("abastecimentos", dados)
+
+                if ok:
+                    st.success("✅ Salvo!")
+                    st.rerun()
+
+    # ================= LISTAGEM =================
+    st.divider()
+    st.subheader("📋 Abastecimentos")
+
+    if df_a.empty:
+        st.info("Nenhum registro.")
+    else:
+
+        df_a = df_a.sort_values("data", ascending=False).fillna("")
+
+        ativos = df_a[df_a["status"] == "ATIVO"]
+        cancelados = df_a[df_a["status"] != "ATIVO"]
+
+        tab1, tab2 = st.tabs(["✅ Ativos", "❌ Cancelados"])
+
+        # ===== ATIVOS =====
+        with tab1:
+            if ativos.empty:
+                st.info("Nenhum ativo.")
+            else:
+                for _, r in ativos.head(20).iterrows():
+                    c1, c2, c3 = st.columns([5,1,1])
+
+                    c1.markdown(
+                        f"📅 {r.get('data','')} | "
+                        f"🚜 {r.get('prefixo','')} | "
+                        f"⛽ {r.get('quantidade',0)} L | "
+                        f"💰 R$ {r.get('total',0):,.2f}"
+                    )
+
+                    if c2.button("✏️", key=f"edit_{r.get('id')}"):
+                        st.warning("Edição em breve")
+
+                    if c3.button("❌", key=f"cancel_{r.get('id')}"):
+                        supabase.table("abastecimentos").update({
+                            "status": "CANCELADO"
+                        }).eq("id", r.get("id")).execute()
+
+                        st.warning("Cancelado!")
+                        st.rerun()
+
+        # ===== CANCELADOS =====
+        with tab2:
+            if cancelados.empty:
+                st.info("Nenhum cancelado.")
+            else:
+                for _, r in cancelados.head(20).iterrows():
+                    c1, c2 = st.columns([5,1])
+
+                    c1.markdown(
+                        f"❌ {r.get('data','')} | "
+                        f"{r.get('prefixo','')} | "
+                        f"{r.get('quantidade',0)} L"
+                    )
+
+                    if c2.button("↩️", key=f"restore_{r.get('id')}"):
+                        supabase.table("abastecimentos").update({
+                            "status": "ATIVO"
+                        }).eq("id", r.get("id")).execute()
+
+                        st.success("Restaurado!")
+                        st.rerun()
 # ════════════════════════════════════════════════════════════════════
 # 3 · TANQUES / ESTOQUE
 # ════════════════════════════════════════════════════════════════════
