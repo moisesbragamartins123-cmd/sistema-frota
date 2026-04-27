@@ -18,45 +18,313 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS GERAL DA APLICAÇÃO (DASHBOARD MODERNIZADO)
+# ═══════════════════════════════════════════════════════════════════
+# ARQUIVO DE CONFIG DO STREAMLIT (criar .streamlit/config.toml)
+# ═══════════════════════════════════════════════════════════════════
+# Se não existir, cria automaticamente
+config_dir = ".streamlit"
+config_file = os.path.join(config_dir, "config.toml")
+
+if not os.path.exists(config_dir):
+    os.makedirs(config_dir)
+
+if not os.path.exists(config_file):
+    config_content = """[theme]
+primaryColor = "#1D9E75"
+backgroundColor = "#F4F7FB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F1923"
+font = "sans serif"
+
+[client]
+showErrorDetails = true
+"""
+    with open(config_file, 'w') as f:
+        f.write(config_content)
+
+# ═══════════════════════════════════════════════════════════════════
+# CSS GERAL - DASHBOARD MODERNO (PADRÃO COPA)
+# ════════════════════  ══════════════════════════════════════════════
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-.main { background-color: #F4F7FB; }
-[data-testid="stSidebar"] { background: #0F1923; }
-[data-testid="stSidebar"] * { color: #C9D4E0 !important; }
-[data-testid="stSidebar"] h3 { color: #1D9E75 !important; }
-.stTextInput>label, .stSelectbox>label, .stNumberInput>label,
-.stDateInput>label, .stTextArea>label {
-    font-size: 12px !important; text-transform: uppercase;
-    color: #475569; font-weight: 600; letter-spacing: 0.05em;
+
+/* FONTE GLOBAL */
+html, body, [class*="css"] { 
+    font-family: 'Inter', sans-serif !important; 
 }
-div.stButton > button:first-child {
-    background: #1D9E75; color: white; border: none;
-    border-radius: 8px; font-weight: 600; padding: .5rem 1.25rem;
+
+/* BACKGROUND PRINCIPAL */
+.main { 
+    background-color: #F4F7FB !important; 
+}
+
+/* ══════════════════════════════════════════ */
+/* SIDEBAR (ESCURO COM VERDE DESTAQUE) */
+/* ══════════════════════════════════════════ */
+[data-testid="stSidebar"] { 
+    background: #0F1923 !important; 
+    background: linear-gradient(180deg, #0F1923 0%, #1a2332 100%) !important;
+}
+
+[data-testid="stSidebar"] * { 
+    color: #C9D4E0 !important; 
+}
+
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h6 { 
+    color: #1D9E75 !important; 
+    font-weight: 700;
+}
+
+/* RÁDIO BUTTONS NO SIDEBAR */
+[data-testid="stSidebar"] .stRadio > label {
+    color: #C9D4E0 !important;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 4px;
     transition: all 0.3s ease;
 }
-div.stButton > button:first-child:hover { 
-    background: #0F6E56; 
-    box-shadow: 0 4px 12px rgba(29, 158, 117, 0.4);
+
+[data-testid="stSidebar"] .stRadio > label:hover {
+    background-color: rgba(29, 158, 117, 0.2) !important;
+    color: #1D9E75 !important;
 }
+
+/* DIVIDER NO SIDEBAR */
+[data-testid="stSidebar"] .stDivider {
+    border-color: rgba(201, 212, 224, 0.2) !important;
+}
+
+/* BOTÃO SAIR */
+[data-testid="stSidebar"] .stButton > button {
+    width: 100%;
+    background: #1D9E75 !important;
+    color: white !important;
+    border-radius: 8px !important;
+    font-weight: 600;
+    padding: 10px 16px !important;
+    transition: all 0.3s ease;
+    border: none !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: #0F6E56 !important;
+    box-shadow: 0 4px 12px rgba(29, 158, 117, 0.4) !important;
+    transform: translateY(-2px);
+}
+
+/* CAPTION NO SIDEBAR */
+[data-testid="stSidebar"] .stCaption {
+    color: #64748B !important;
+    font-size: 12px !important;
+    text-align: center;
+}
+
+/* ══════════════════════════════════════════ */
+/* LABELS E INPUTS */
+/* ══════════════════════════════════════════ */
+.stTextInput>label, 
+.stSelectbox>label, 
+.stNumberInput>label,
+.stDateInput>label, 
+.stTextArea>label,
+.stSlider>label {
+    font-size: 12px !important; 
+    text-transform: uppercase;
+    color: #475569 !important; 
+    font-weight: 600 !important; 
+    letter-spacing: 0.05em;
+}
+
+/* FORMS */
 div[data-testid="stForm"] {
-    border: none; border-radius: 16px;
-    padding: 2rem; background: white;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    border: none !important; 
+    border-radius: 16px !important;
+    padding: 2rem !important; 
+    background: white !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important;
 }
-.banner-ok  { background:#EAF3DE; color:#3B6D11; border:1px solid #C0DD97; border-radius:10px; padding:12px 16px; font-weight:600; font-size:13px; margin-bottom:1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-.banner-low { background:#FAEEDA; color:#854F0B; border:1px solid #FAC775; border-radius:10px; padding:12px 16px; font-weight:600; font-size:13px; margin-bottom:1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-.banner-err { background:#FCEBEB; color:#A32D2D; border:1px solid #F0B0AE; border-radius:10px; padding:12px 16px; font-weight:600; font-size:13px; margin-bottom:1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-.banner-info{ background:#E6F1FB; color:#185FA5; border:1px solid #A8C9EE; border-radius:10px; padding:12px 16px; font-weight:600; font-size:13px; margin-bottom:1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-.kpi-box { background:white; border:none; border-radius:12px; padding:1.5rem; text-align:center; height:100%; box-shadow: 0 4px 15px rgba(0,0,0,0.04); transition: transform 0.2s ease; }
-.kpi-box:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
-.kpi-box h3 { margin:0; font-size:24px; color:#0F1923; margin-top: 10px; }
-.kpi-box p  { margin:0; font-size:11px; color:#64748B; text-transform:uppercase; font-weight:700; letter-spacing: 0.05em; }
-.kpi-verde { color:#1D9E75 !important; }
-.kpi-rojo  { color:#A32D2D !important; }
-.kpi-azul  { color:#185FA5 !important; }
+
+/* BOTÕES PRIMÁRIOS */
+div.stButton > button:first-child {
+    background: #1D9E75 !important; 
+    color: white !important; 
+    border: none !important;
+    border-radius: 8px !important; 
+    font-weight: 600 !important; 
+    padding: .75rem 1.5rem !important;
+    transition: all 0.3s ease !important;
+}
+
+div.stButton > button:first-child:hover { 
+    background: #0F6E56 !important; 
+    box-shadow: 0 4px 12px rgba(29, 158, 117, 0.4) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* ══════════════════════════════════════════ */
+/* BANNERS (ALERTAS) */
+/* ══════════════════════════════════════════ */
+.banner-ok { 
+    background: #EAF3DE !important; 
+    color: #3B6D11 !important; 
+    border: 1px solid #C0DD97 !important;
+    border-radius: 10px !important; 
+    padding: 12px 16px !important; 
+    font-weight: 600 !important; 
+    font-size: 13px !important; 
+    margin-bottom: 1rem !important; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+}
+
+.banner-low { 
+    background: #FAEEDA !important; 
+    color: #854F0B !important; 
+    border: 1px solid #FAC775 !important;
+    border-radius: 10px !important; 
+    padding: 12px 16px !important; 
+    font-weight: 600 !important; 
+    font-size: 13px !important; 
+    margin-bottom: 1rem !important; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+}
+
+.banner-err { 
+    background: #FCEBEB !important; 
+    color: #A32D2D !important; 
+    border: 1px solid #F0B0AE !important;
+    border-radius: 10px !important; 
+    padding: 12px 16px !important; 
+    font-weight: 600 !important; 
+    font-size: 13px !important; 
+    margin-bottom: 1rem !important; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+}
+
+.banner-info { 
+    background: #E6F1FB !important; 
+    color: #185FA5 !important; 
+    border: 1px solid #A8C9EE !important;
+    border-radius: 10px !important; 
+    padding: 12px 16px !important; 
+    font-weight: 600 !important; 
+    font-size: 13px !important; 
+    margin-bottom: 1rem !important; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+}
+
+/* ══════════════════════════════════════════ */
+/* KPI BOXES */
+/* ══════════════════════════════════════════ */
+.kpi-box { 
+    background: white !important; 
+    border: 1px solid #E2E8F0 !important; 
+    border-radius: 12px !important; 
+    padding: 1.5rem !important; 
+    text-align: center !important; 
+    height: 100% !important; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.04) !important; 
+    transition: all 0.3s ease !important;
+}
+
+.kpi-box:hover { 
+    transform: translateY(-4px) !important; 
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1) !important; 
+}
+
+.kpi-box h3 { 
+    margin: 10px 0 0 0 !important; 
+    font-size: 28px !important; 
+    font-weight: 700 !important;
+    color: #0F1923 !important; 
+}
+
+.kpi-box p { 
+    margin: 0 0 10px 0 !important; 
+    font-size: 11px !important; 
+    color: #64748B !important; 
+    text-transform: uppercase !important; 
+    font-weight: 700 !important; 
+    letter-spacing: 0.05em !important;
+}
+
+.kpi-verde { color: #1D9E75 !important; font-weight: 700; }
+.kpi-rojo { color: #A32D2D !important; font-weight: 700; }
+.kpi-azul { color: #185FA5 !important; font-weight: 700; }
+
+/* ══════════════════════════════════════════ */
+/* TELA DE LOGIN */
+/* ══════════════════════════════════════════ */
+.login-container {
+    background: white;
+    border-radius: 16px;
+    padding: 2.5rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+
+.login-title {
+    text-align: center;
+    color: #0F1923;
+    font-weight: 700;
+    font-size: 28px;
+    margin-bottom: 1.5rem;
+}
+
+.login-subtitle {
+    text-align: center;
+    color: #64748B;
+    font-size: 14px;
+    margin-bottom: 2rem;
+}
+
+/* ══════════════════════════════════════════ */
+/* TABS */
+/* ══════════════════════════════════════════ */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 1rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    border-bottom: 2px solid transparent;
+}
+
+.stTabs [aria-selected="true"] {
+    border-bottom-color: #1D9E75 !important;
+    color: #1D9E75 !important;
+}
+
+/* ══════════════════════════════════════════ */
+/* TABELAS */
+/* ══════════════════════════════════════════ */
+.stDataFrame {
+    border-radius: 10px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04) !important;
+}
+
+[data-testid="stDataFrame"] {
+    width: 100%;
+}
+
+/* ══════════════════════════════════════════ */
+/* EXPANDERS */
+/* ══════════════════════════════════════════ */
+.streamlit-expanderHeader {
+    border-radius: 8px;
+    border: 1px solid #E2E8F0;
+}
+
+.streamlit-expanderHeader:hover {
+    background-color: #F1F5F9;
+    border-color: #1D9E75;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,82 +379,140 @@ def dia_semana_pt(d) -> str:
     except: return ""
 
 # ═══════════════════════════════════════════════════════════════════
-# EXPORTAÇÃO — EXCEL PADRÃO COPA E PDF (Suas funções originais continuam aqui)
+# FUNÇÕES DE EXPORTAÇÃO (MANTENHA AS SUAS ORIGINAIS AQUI)
 # ═══════════════════════════════════════════════════════════════════
-
-# (Mantenha as suas funções gerar_excel_copa, gerar_excel_tanque, gerar_excel_limpo e gerar_pdf originais aqui)
-# Para economizar espaço no chat, pulei o bloco gigantesco delas, 
-# mas você DEVE deixá-las exatamente onde estão no seu arquivo!
+# (Copie e cole aqui suas funções: gerar_excel_copa, gerar_excel_tanque, gerar_excel_limpo, gerar_pdf)
 
 # ═══════════════════════════════════════════════════════════════════
-# LOGIN — ESTRUTURA VISUAL E CSS CONDICIONAL (A MÁGICA DA TELA INICIAL)
+# LOGIN
 # ═══════════════════════════════════════════════════════════════════
 for k,v in [("logged_in",False),("usuario_logado",""),("perfil_logado","")]:
     if k not in st.session_state: st.session_state[k]=v
 
 if not st.session_state.logged_in:
-    # Injeta a imagem de fundo de rodovia apenas na tela de login
+    # BACKGROUND NO LOGIN
     st.markdown("""
     <style>
     [data-testid="stAppViewContainer"] {
-        background: linear-gradient(rgba(15, 25, 35, 0.7), rgba(15, 25, 35, 0.7)), url('https://images.unsplash.com/photo-1463171379579-3fdfb86d6285?q=80&w=2070') no-repeat center center fixed !important;
-        background-size: cover !important;
+        background: linear-gradient(135deg, #0F1923 0%, #1a2f4a 50%, #0F1923 100%);
+        background-attachment: fixed;
     }
-    [data-testid="stHeader"] { background: transparent !important; }
-    [data-testid="stSidebar"] { display: none; } /* Esconde sidebar no login */
+    [data-testid="stHeader"] { 
+        background: transparent !important; 
+    }
+    [data-testid="stSidebar"] { 
+        display: none !important; 
+    }
+    [data-testid="stDecoration"] {
+        display: none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
     st.write("<br><br><br>", unsafe_allow_html=True)
     
-    # Caixinha centralizada do login
-    c1, c2, c3 = st.columns([1, 1.2, 1])
-    with c2:
-        with st.form("login"):
-            if os.path.exists("logo.png"): 
-                col_l1, col_l2, col_l3 = st.columns([1, 1.5, 1])
-                with col_l2:
-                    st.image("logo.png", use_container_width=True)
+    # CONTAINER CENTRALIZADO
+    col1, col2, col3 = st.columns([0.8, 1.4, 0.8])
+    
+    with col2:
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        
+        # LOGO
+        if os.path.exists("logo.png"):
+            st.image("logo.png", use_container_width=True, width=200)
+        else:
+            st.markdown("### 🏗️ COPA Engenharia")
+        
+        st.markdown('<h2 class="login-title">Acesso Restrito</h2>', unsafe_allow_html=True)
+        st.markdown('<p class="login-subtitle">Sistema PavControl — Gestão de Frota e Combustível</p>', unsafe_allow_html=True)
+        
+        with st.form("login_form", clear_on_submit=False):
+            usuario = st.text_input("👤 Usuário", placeholder="Digite seu login")
+            senha = st.text_input("🔐 Senha", type="password", placeholder="Digite sua senha")
             
-            st.markdown("<h2 style='text-align:center;color:#1E293B;font-weight:700;margin-bottom:1.5rem;'>Acesso Restrito</h2>", unsafe_allow_html=True)
+            st.write("")
             
-            u = st.text_input("Usuário")
-            p = st.text_input("Senha", type="password")
-            
-            st.write("<br>", unsafe_allow_html=True)
-            if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
+            if st.form_submit_button("🔓 ENTRAR NO SISTEMA", use_container_width=True):
                 try:
-                    res=supabase.table("usuarios").select("*").eq("login",u).eq("senha",p).execute()
+                    res = supabase.table("usuarios").select("*").eq("login",usuario).eq("senha",senha).execute()
                     if res.data:
-                        st.session_state.logged_in=True
-                        st.session_state.usuario_logado=res.data[0]["nome"]
-                        st.session_state.perfil_logado=res.data[0]["perfil"]
+                        st.session_state.logged_in = True
+                        st.session_state.usuario_logado = res.data[0]["nome"]
+                        st.session_state.perfil_logado = res.data[0]["perfil"]
+                        st.success("✅ Acesso concedido!")
+                        time.sleep(0.5)
                         st.rerun()
-                    else: st.error("❌ Usuário ou senha incorretos.")
-                except:
+                    else:
+                        st.error("❌ Usuário ou senha incorretos.")
+                except Exception as e:
                     # Fallback secrets
-                    if u==st.secrets.get("ADMIN_USER","admin") and p==st.secrets.get("ADMIN_PASS","obra2026"):
-                        st.session_state.logged_in=True; st.session_state.usuario_logado="Admin"; st.session_state.perfil_logado="Admin"; st.rerun()
-                    else: st.error("❌ Usuário ou senha incorretos.")
+                    if usuario == st.secrets.get("ADMIN_USER","admin") and senha == st.secrets.get("ADMIN_PASS","obra2026"):
+                        st.session_state.logged_in = True
+                        st.session_state.usuario_logado = "Admin"
+                        st.session_state.perfil_logado = "Admin"
+                        st.success("✅ Acesso concedido!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error("❌ Usuário ou senha incorretos.")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        st.write("<br><br>", unsafe_allow_html=True)
+        st.caption("🔒 Acesso autorizado apenas para usuários cadastrados")
+    
     st.stop()
 
 # ═══════════════════════════════════════════════════════════════════
-# SIDEBAR (ESQUERDA)
+# SIDEBAR (PÓS LOGIN)
 # ═══════════════════════════════════════════════════════════════════
 with st.sidebar:
+    # LOGO
     if os.path.exists("logo.png"):
-        c1,c2,c3=st.columns([1,2,1])
-        with c2: st.image("logo.png",use_container_width=True)
-    st.markdown(f"<div style='text-align:center;color:#1D9E75;font-size:13px;font-weight:bold;'>👤 {st.session_state.usuario_logado}</div>",unsafe_allow_html=True)
+        col_lg1, col_lg2, col_lg3 = st.columns([0.5, 2, 0.5])
+        with col_lg2:
+            st.image("logo.png", use_container_width=True)
+    else:
+        st.markdown("### 🏗️ COPA")
+    
+    # USUÁRIO LOGADO
+    st.markdown(f"""
+    <div style='text-align:center;background:rgba(29,158,117,0.1);padding:12px;border-radius:8px;margin-bottom:1rem;'>
+        <div style='color:#1D9E75;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;'>Usuário Logado</div>
+        <div style='color:#C9D4E0;font-size:14px;font-weight:600;margin-top:6px;'>👤 {st.session_state.usuario_logado}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.divider()
-    opcoes=["🏠 Painel Início","⛽ Lançar Abastecimento","🛢️ Tanques / Estoque",
-            "🚚 Boletim de Transporte","🚜 Frota e Equipamentos",
-            "🏪 Fornecedores","🏗️ Obras Cadastradas","📋 Relatórios e Fechamentos"]
-    if st.session_state.perfil_logado=="Admin": opcoes.append("👥 Usuários e Acessos")
-    menu=st.sidebar.radio("",opcoes,label_visibility="collapsed")
+    
+    # MENU
+    st.markdown("<div style='color:#1D9E75;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1rem;'>Navegação</div>", unsafe_allow_html=True)
+    
+    opcoes = [
+        "🏠 Painel Início",
+        "⛽ Lançar Abastecimento",
+        "🛢️ Tanques / Estoque",
+        "🚚 Boletim de Transporte",
+        "🚜 Frota e Equipamentos",
+        "🏪 Fornecedores",
+        "🏗️ Obras Cadastradas",
+        "📋 Relatórios e Fechamentos"
+    ]
+    
+    if st.session_state.perfil_logado == "Admin":
+        opcoes.append("👥 Usuários e Acessos")
+    
+    menu = st.radio("", opcoes, label_visibility="collapsed")
+    
     st.divider()
-    if st.button("🚪 Sair",use_container_width=True):
-        st.session_state.logged_in=False; st.session_state.usuario_logado=""; st.session_state.perfil_logado=""; st.rerun()
+    
+    # BOTÃO SAIR
+    if st.button("🚪 Sair", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.usuario_logado = ""
+        st.session_state.perfil_logado = ""
+        st.rerun()
+    
     st.caption("☁️ Supabase — Tempo Real")
 
 
