@@ -650,33 +650,62 @@ elif menu=="🚚 Boletim de Transporte":
         v_info=df_v[df_v["prefixo"]==pref].iloc[0]
         mot=c3.text_input("Motorista / Operador",value=v_info.get("motorista",""))
         
-        st.markdown("#### 🛣️ Detalhes da Viagem / Carga")
-        c4,c5=st.columns(2)
+        st.markdown("#### 🛣️ Rota e Viagem")
+        c4,c5,c6 = st.columns(3)
         op_tipo=c4.selectbox("Tipo de Operação",["Transporte de Massa/CBUQ","Transporte de Fresado","Terraplanagem","Venda de Massa","Ocioso/Manutenção"])
-        local=c5.text_input("Local de Aplicação / Trecho")
+        origem_rota=c5.text_input("Origem / Jazida (Ex: Usina, Pedreira, Base)")
+        destino_rota=c6.text_input("Destino / Trecho de Aplicação")
         
-        c6,c7,c8,c9=st.columns(4)
-        km_s=c6.number_input("KM Inicial",min_value=0.0)
-        km_c=c7.number_input("KM Final",min_value=0.0)
-        carradas=c8.number_input("Nº de Carradas/Viagens",min_value=0,step=1)
-        ton=c9.number_input("Total Toneladas",min_value=0.0)
+        st.markdown("#### 📊 Produção e Hodômetro")
+        c7,c8,c9,c10=st.columns(4)
+        km_s=c7.number_input("KM Inicial",min_value=0.0)
+        km_c=c8.number_input("KM Final",min_value=0.0)
+        carradas=c9.number_input("Nº de Carradas/Viagens",min_value=0,step=1)
+        ton=c10.number_input("Total Toneladas",min_value=0.0)
         
+        st.markdown("#### ⛽ Abastecimento na Viagem (Opcional)")
+        c11, c12, c13 = st.columns(3)
+        houve_abast = c11.checkbox("Houve abastecimento externo nesta rota?")
+        litros_rota = c12.number_input("Litros abastecidos", min_value=0.0) if houve_abast else 0.0
+        valor_abast_rota = c13.number_input("Valor Total (R$)", min_value=0.0) if houve_abast else 0.0
+
         obs_p=st.text_input("Observações Gerais")
 
         if st.form_submit_button("💾 Salvar Boletim Diário",use_container_width=True):
-            if op_tipo!="Ocioso/Manutenção" and carradas<=0: st.error("⚠️ Insira a quantidade de viagens.")
+            if op_tipo!="Ocioso/Manutenção" and carradas<=0: 
+                st.error("⚠️ Insira a quantidade de viagens.")
             else:
-                ok=insert_data("producao",{"data":str(dt_p),"prefixo":pref,"motorista":mot.upper(),"tipo_operacao":op_tipo,"local_aplicacao":local,"km_saida":km_s,"km_chegada":km_c,"carradas":carradas,"toneladas":ton,"observacao":obs_p,"criado_por":st.session_state.usuario_logado})
+                # Dicionário de dados atualizado com as informações completas da viagem
+                dados_inserir = {
+                    "data": str(dt_p),
+                    "prefixo": pref,
+                    "motorista": mot.upper(),
+                    "tipo_operacao": op_tipo,
+                    "origem": origem_rota.upper(),
+                    "destino": destino_rota.upper(),
+                    "local_aplicacao": destino_rota.upper(), # Mantido para compatibilidade com relatórios
+                    "km_saida": km_s,
+                    "km_chegada": km_c,
+                    "carradas": carradas,
+                    "toneladas": ton,
+                    "abastecimento_litros": litros_rota,
+                    "abastecimento_valor": valor_abast_rota,
+                    "observacao": obs_p,
+                    "criado_por": st.session_state.usuario_logado
+                }
+                ok=insert_data("producao", dados_inserir)
                 if ok: st.success("✅ Boletim salvo!"); time.sleep(1); st.rerun()
 
     df_bol=get_data("producao")
     if not df_bol.empty:
         st.divider(); st.subheader("📋 Últimos Boletins Registrados")
         df_br=df_bol.sort_values("data",ascending=False).head(20).fillna("")
-        colunas=["data","prefixo","motorista","tipo_operacao","carradas","toneladas","km_saida","km_chegada","local_aplicacao"]
         
-        # AQUI ESTÁ A CORREÇÃO DO BUG (KeyError)
-        colunas_presentes = [c for c in colunas if c in df_br.columns]
+        # Tabela agora exibe as colunas de origem, destino e abastecimento
+        colunas_bol=["data","prefixo","motorista","tipo_operacao", "origem", "destino", "carradas","toneladas", "abastecimento_litros", "km_saida","km_chegada"]
+        
+        # A vacina contra o Bug: Só puxa as colunas se elas existirem no banco de dados!
+        colunas_presentes = [c for c in colunas_bol if c in df_br.columns]
         df_exibir = df_br[colunas_presentes].copy()
         
         st.dataframe(df_exibir,use_container_width=True)
