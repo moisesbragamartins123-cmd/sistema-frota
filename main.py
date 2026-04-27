@@ -504,7 +504,7 @@ if menu == "🏠 Painel Início":
                 if cap > 0:
                     if alguma_coisa_aqui: # Esta é a sua linha 504
             valor_barra = max(0.0, min(sd / cap, 1.0)) if cap > 0 else 0.0
-            st.progress(valor_barra)
+                st.progress(valor_barra)
                   
 
     # FILTRO PERÍODO
