@@ -433,7 +433,7 @@ if not st.session_state.logged_in:
 with st.sidebar:
     if os.path.exists("logo.png"):
         c1,c2,c3=st.columns([1,2,1])
-        with c2: st.image("logo.png", width=200)
+        with c2: st.image("logo.png", width=300)
     st.markdown(f"<div style='text-align:center;color:#1D9E75;font-size:13px;font-weight:bold;'>👤 {st.session_state.usuario_logado}</div>",unsafe_allow_html=True)
     st.divider()
     
