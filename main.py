@@ -403,7 +403,7 @@ if not st.session_state.logged_in:
 
     /* 🔥 REMOVE ESPAÇOS EXAGERADOS */
     div[data-testid="stForm"] {
-        margin-top: -40px;
+        margin-top: -20px;
     }
 
     img {
