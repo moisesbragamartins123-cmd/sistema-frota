@@ -414,12 +414,13 @@ elif menu == "⛽ Lançar Abastecimento":
                     "status": "ATIVO"
                 }
 
-                try:
-                    insert_data("abastecimentos", dados)
-                    st.success("Salvo com sucesso!")
+                # O insert_data já nos diz se deu certo (True) ou não (False)
+                ok = insert_data("abastecimentos", dados)
+                if ok:
+                    st.success("✅ Salvo com sucesso!")
+                    time.sleep(1) # Pausa de 1 segundo para você ver a mensagem de sucesso
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Erro: {e}")
+                # Se não der "ok", ele não faz o st.rerun() e a mensagem de erro vermelha fica congelada na tela para você ler!
 
     # ═══════════════════════════════════════════════
     # LISTAGEM
