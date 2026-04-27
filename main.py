@@ -89,26 +89,27 @@ div[data-testid="stForm"] {
 # ═══════════════════════════════════════════════════════════════════
 # SUPABASE E BANCO DE DADOS (COM TEMPO REAL)
 # ═══════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# SUPABASE E BANCO DE DADOS (COM TEMPO REAL)
+# ═══════════════════════════════════════════════════════════════════
 @st.cache_resource
 def get_supabase():
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
 supabase = get_supabase()
 
-@st.cache_data(ttl=60) # Mantemos cache para performance, mas vamos limpá-lo na inserção
-def delete_data(table: str, row_id) -> bool:
+# Função de busca LIMPA, sem o @st.cache_data
+def get_data(table: str) -> pd.DataFrame:
     try:
-        supabase.table(table).delete().eq("id", row_id).execute()
-        # Remova o get_data.clear() que tínhamos colocado, já não precisamos dele!
-        return True
+        res = supabase.table(table).select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except Exception as e:
-        st.error(f"❌ Erro ao excluir: {e}")
-        return False
+        st.warning(f"⚠️ Erro ao buscar {table}: {e}")
+        return pd.DataFrame()
 
 def insert_data(table: str, data: dict) -> bool:
     try:
         supabase.table(table).insert(data).execute()
-        get_data.clear() # 🔥 GATILHO DE TEMPO REAL: Limpa o cache para forçar a atualização imediata
         return True
     except Exception as e:
         st.error(f"❌ Erro ao salvar: {e}")
@@ -117,7 +118,6 @@ def insert_data(table: str, data: dict) -> bool:
 def delete_data(table: str, row_id) -> bool:
     try:
         supabase.table(table).delete().eq("id", row_id).execute()
-        get_data.clear() # 🔥 GATILHO DE TEMPO REAL: Limpa o cache para forçar a atualização imediata
         return True
     except Exception as e:
         st.error(f"❌ Erro ao excluir: {e}")
@@ -134,7 +134,6 @@ def calcular_saldo(nome_tanque: str) -> float:
         mask = (df_sai["origem"]=="Tanque Interno") & (df_sai["nome_tanque"]==nome_tanque)
         t_sai = pd.to_numeric(df_sai.loc[mask,"quantidade"], errors="coerce").sum()
     return float(t_ent) - float(t_sai)
-
 # ═══════════════════════════════════════════════════════════════════
 # LOGIN
 # ═══════════════════════════════════════════════════════════════════
