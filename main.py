@@ -332,7 +332,7 @@ if menu == "🏠 Painel Início":
 
 elif menu == "⛽ Lançar Abastecimento":
 
-    st.markdown("## ⛽ Lançar Saída de Combustível")
+    st.markdown("## ⛽ Lançar Aquisição de Combustível")
 
     df_v = get_data("veiculos")
     df_f = get_data("fornecedores")
