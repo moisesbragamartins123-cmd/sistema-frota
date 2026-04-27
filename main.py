@@ -713,8 +713,74 @@ elif menu=="🚚 Boletim de Transporte":
 # ════════════════════════════════════════════════════════════════════
 # 5 · FROTA E EQUIPAMENTOS
 # ════════════════════════════════════════════════════════════════════
+elif menu=="🚜 Frota e Equipamentos":
+    st.markdown("## 🚜 Gestão de Frota")
 
+    df_v = get_data("veiculos")
 
+    # 🛡️ Proteção contra colunas inexistentes
+    if not df_v.empty:
+        if "categoria" not in df_v.columns:
+            df_v["categoria"] = df_v.get("tipo", "")
+        if "tipo_combustivel_padrao" not in df_v.columns:
+            df_v["tipo_combustivel_padrao"] = ""
+        if "motorista" not in df_v.columns:
+            df_v["motorista"] = ""
+        if "placa" not in df_v.columns:
+            df_v["placa"] = ""
+
+    # ═════════ CADASTRO ═════════
+    with st.expander("➕ CADASTRAR NOVO VEÍCULO / EQUIPAMENTO", expanded=True):
+        with st.form("f_v", clear_on_submit=True):
+
+            c1, c2, c3 = st.columns(3)
+            pref = c1.text_input("Código / Prefixo (Ex: CA-01)")
+            plc  = c2.text_input("Placa")
+            categoria = c3.selectbox("Categoria", ["Veículo", "Equipamento"])
+
+            c4, c5 = st.columns(2)
+            mot  = c4.text_input("Motorista / Operador Fixo")
+            comb = c5.selectbox("Combustível Padrão", ["Diesel S10","Diesel S500","Gasolina Comum"])
+
+            if st.form_submit_button("💾 Salvar", use_container_width=True):
+
+                if pref:
+                    dados = {
+                        "prefixo": pref.upper(),
+                        "placa": plc.upper(),
+                        "categoria": categoria,
+                        "motorista": mot.upper(),
+                        "tipo_combustivel_padrao": comb
+                    }
+
+                    ok = insert_data("veiculos", dados)
+
+                    if ok:
+                        st.success("✅ Salvo com sucesso!")
+                        st.rerun()
+                else:
+                    st.error("⚠️ Prefixo é obrigatório.")
+
+    # ═════════ LISTAGEM ═════════
+    if not df_v.empty:
+        st.divider()
+        st.subheader("📋 Frota Ativa")
+
+        for _, r in df_v.iterrows():
+            cc1, cc2 = st.columns([5,1])
+
+            categoria = r.get("categoria") or r.get("tipo") or "-"
+
+            cc1.markdown(
+                f"**{r.get('prefixo','')}** | "
+                f"{categoria} | "
+                f"Placa: {r.get('placa','')} | "
+                f"Operador: {r.get('motorista','')}"
+            )
+
+            if cc2.button("❌ Excluir", key=f"d_v_{r.get('id','x')}"):
+                if delete_data("veiculos", r.get("id")):
+                    st.rerun()
 # ════════════════════════════════════════════════════════════════════
 # 6 · FORNECEDORES
 # ════════════════════════════════════════════════════════════════════
