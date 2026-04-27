@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS GERAL DA APLICAÇÃO (DASHBOARD E FORMULÁRIOS MODERNIZADOS)
+# CSS GERAL DA APLICAÇÃO
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -83,14 +83,11 @@ div[data-testid="stForm"] {
 .kpi-box:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
 .kpi-box h3 { margin:0; font-size:24px; color:#0F1923; margin-top: 10px; }
 .kpi-box p  { margin:0; font-size:11px; color:#64748B; text-transform:uppercase; font-weight:700; letter-spacing: 0.05em; }
-.kpi-verde { color:#1D9E75 !important; }
-.kpi-rojo  { color:#A32D2D !important; }
-.kpi-azul  { color:#185FA5 !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════
-# SUPABASE
+# SUPABASE E BANCO DE DADOS (COM TEMPO REAL)
 # ═══════════════════════════════════════════════════════════════════
 @st.cache_resource
 def get_supabase():
@@ -98,6 +95,7 @@ def get_supabase():
 
 supabase = get_supabase()
 
+@st.cache_data(ttl=60) # Mantemos cache para performance, mas vamos limpá-lo na inserção
 def get_data(table: str) -> pd.DataFrame:
     try:
         res = supabase.table(table).select("*").execute()
@@ -109,16 +107,20 @@ def get_data(table: str) -> pd.DataFrame:
 def insert_data(table: str, data: dict) -> bool:
     try:
         supabase.table(table).insert(data).execute()
+        get_data.clear() # 🔥 GATILHO DE TEMPO REAL: Limpa o cache para forçar a atualização imediata
         return True
     except Exception as e:
-        st.error(f"❌ Erro ao salvar: {e}"); return False
+        st.error(f"❌ Erro ao salvar: {e}")
+        return False
 
 def delete_data(table: str, row_id) -> bool:
     try:
         supabase.table(table).delete().eq("id", row_id).execute()
+        get_data.clear() # 🔥 GATILHO DE TEMPO REAL: Limpa o cache para forçar a atualização imediata
         return True
     except Exception as e:
-        st.error(f"❌ Erro ao excluir: {e}"); return False
+        st.error(f"❌ Erro ao excluir: {e}")
+        return False
 
 def calcular_saldo(nome_tanque: str) -> float:
     df_ent = get_data("entradas_tanque")
@@ -132,291 +134,29 @@ def calcular_saldo(nome_tanque: str) -> float:
         t_sai = pd.to_numeric(df_sai.loc[mask,"quantidade"], errors="coerce").sum()
     return float(t_ent) - float(t_sai)
 
-def dia_semana_pt(d) -> str:
-    dias = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"]
-    try:
-        if isinstance(d, str): d = datetime.strptime(d[:10],"%Y-%m-%d")
-        return dias[d.weekday()]
-    except: return ""
-
 # ═══════════════════════════════════════════════════════════════════
-# EXPORTAÇÃO — EXCEL PADRÃO COPA E PDF TIMBRADO
-# ═══════════════════════════════════════════════════════════════════
-def gerar_excel_copa(df: pd.DataFrame, dados_forn: dict, periodo: str, obra: str, nome_forn: str = "") -> bytes:
-    df = df.fillna("").copy()
-    dias_pt = {0:"SEG",1:"TER",2:"QUA",3:"QUI",4:"SEX",5:"SÁB",6:"DOM"}
-    template = "template_posto.xlsx"
-    if os.path.exists(template):
-        from openpyxl import load_workbook
-        wb = load_workbook(template); ws = wb.active
-        ws["D1"] = obra.upper(); ws["D3"] = periodo.upper()
-        ws["J1"] = dados_forn.get("razao_social", dados_forn.get("nome","")).upper()
-        ws["J2"] = dados_forn.get("agencia",""); ws["J3"] = dados_forn.get("conta","")
-        ws["M1"] = dados_forn.get("pix",""); ws["M2"] = dados_forn.get("tipo_conta",""); ws["M3"] = dados_forn.get("banco","")
-        row0 = 8
-        for i,(_,r) in enumerate(df.iterrows()):
-            dia_str = ""
-            try: dia_str = dias_pt[datetime.strptime(str(r.get("data",""))[:10],"%Y-%m-%d").weekday()]
-            except: pass
-            qtd  = float(r.get("quantidade",    0) or 0)
-            vunt = float(r.get("valor_unitario", 0) or 0)
-            tot  = float(r.get("total",          0) or 0)
-            ws.cell(row0+i,1,str(r.get("data",""))[:10]); ws.cell(row0+i,2,dia_str)
-            ws.cell(row0+i,3,str(r.get("numero_ficha",""))); ws.cell(row0+i,4,str(r.get("placa","")))
-            ws.cell(row0+i,5,str(r.get("prefixo",""))); ws.cell(row0+i,6,str(r.get("motorista","")))
-            ws.cell(row0+i,7,str(r.get("fornecedor",""))); ws.cell(row0+i,8,str(r.get("tipo_combustivel","")))
-            ws.cell(row0+i,9,qtd).number_format="#,##0.00"
-            ws.cell(row0+i,10,vunt).number_format='"R$" #,##0.00'
-            ws.cell(row0+i,11,tot).number_format='"R$" #,##0.00'
-            ws.cell(row0+i,12,str(r.get("horimetro",""))); ws.cell(row0+i,13,str(r.get("observacao","")))
-        buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
-    
-    import xlsxwriter
-    buf = io.BytesIO(); wb = xlsxwriter.Workbook(buf)
-    ws  = wb.add_worksheet("Abastecimento")
-    fh  = wb.add_format({"bold":True,"font_size":9,"border":1,"align":"center","valign":"vcenter","bg_color":"#BDD7EE","text_wrap":True})
-    fd  = wb.add_format({"font_size":9,"border":1,"align":"center"})
-    fn  = wb.add_format({"font_size":9,"border":1,"num_format":"#,##0.00","align":"right"})
-    fm  = wb.add_format({"font_size":9,"border":1,"num_format":'"R$" #,##0.00',"align":"right"})
-    ft  = wb.add_format({"bold":True,"font_size":9,"border":1,"num_format":"#,##0.00","align":"right","bg_color":"#D9D9D9"})
-    ftm = wb.add_format({"bold":True,"font_size":9,"border":1,"num_format":'"R$" #,##0.00',"align":"right","bg_color":"#D9D9D9"})
-    ftx = wb.add_format({"bold":True,"font_size":9,"border":1,"align":"right","bg_color":"#D9D9D9"})
-    flb = wb.add_format({"bold":True,"font_size":9})
-    fvl = wb.add_format({"font_size":9})
-    fti = wb.add_format({"bold":True,"font_size":11,"align":"center","bg_color":"#D9D9D9","border":1})
-
-    ws.write(0,0,"OBRA:",flb); ws.write(0,2,obra.upper(),fvl)
-    ws.write(0,5,"PREÇO GASOLINA (L)",flb); ws.write(0,6,dados_forn.get("preco_gasolina","") or "",fvl)
-    ws.write(0,8,"RAZÃO SOCIAL",flb); ws.write(0,10,dados_forn.get("razao_social",""),fvl)
-    ws.write(0,12,"TIPO DE CONTA:",flb); ws.write(0,13,dados_forn.get("tipo_conta",""),fvl)
-    ws.write(1,0,"DESCRIÇÃO:",flb)
-    ws.write(1,5,"PREÇO DIESEL (L)",flb); ws.write(1,6,dados_forn.get("preco_diesel","") or "",fvl)
-    ws.write(1,8,"AGÊNCIA:",flb); ws.write(1,10,dados_forn.get("agencia",""),fvl)
-    ws.write(1,12,"BANCO:",flb); ws.write(1,13,dados_forn.get("banco",""),fvl)
-    ws.write(2,0,"PERÍODO:",flb); ws.write(2,2,periodo.upper(),fvl)
-    ws.write(2,8,"CONTA:",flb); ws.write(2,10,dados_forn.get("conta",""),fvl)
-    ws.write(2,12,"PIX:",flb); ws.write(2,13,dados_forn.get("pix",""),fvl)
-
-    titulo = f"CONTROLE DE ABASTECIMENTO  —  {nome_forn.upper() or obra.upper()}"
-    ws.merge_range(3,0,3,13,titulo,fti)
-
-    heads = ["DATA","DIA DA\nSEMANA","FICHA","PLACA","CÓDIGO /\nPREFIXO","VEÍCULO / MAQUINA -\nMOTORISTA / OPERADOR","FORNECEDOR","TIPO DE\nCOMBUSTÍVEL","QUANTIDADE\n(L)","VALOR\nUNITÁRIO (R$)","TOTAL\n(R$)","KM / HOR","OBSERVAÇÃO"]
-    widths = [12,8,8,10,10,30,20,12,10,12,12,10,30]
-    ws.set_row(4,36)
-    for ci,(h,w) in enumerate(zip(heads,widths)):
-        ws.write(4,ci,h,fh); ws.set_column(ci,ci,w)
-
-    t_l=0.0; t_r=0.0
-    for ri,(_,r) in enumerate(df.iterrows(),start=5):
-        dia_str=""
-        try: dia_str=dias_pt[datetime.strptime(str(r.get("data",""))[:10],"%Y-%m-%d").weekday()]
-        except: pass
-        qtd=float(r.get("quantidade",0) or 0); vunt=float(r.get("valor_unitario",0) or 0); tot=float(r.get("total",0) or 0)
-        t_l+=qtd; t_r+=tot
-        for ci,v in enumerate([str(r.get("data",""))[:10],dia_str,str(r.get("numero_ficha","")),str(r.get("placa","")),str(r.get("prefixo","")),str(r.get("motorista","")),str(r.get("fornecedor","")),str(r.get("tipo_combustivel",""))]):
-            ws.write(ri,ci,v,fd)
-        ws.write(ri,8,qtd,fn); ws.write(ri,9,vunt,fm); ws.write(ri,10,tot,fm)
-        ws.write(ri,11,str(r.get("horimetro","")),fd); ws.write(ri,12,str(r.get("observacao","")),fd)
-
-    row_t=5+len(df)
-    ws.merge_range(row_t,0,row_t,7,"TOTAL",ftx)
-    ws.write(row_t,8,t_l,ft); ws.write(row_t,9,"",ftx); ws.write(row_t,10,t_r,ftm)
-    ws.write(row_t,11,"TOTAL",ftx); ws.write(row_t,12,"",ftx)
-    wb.close(); buf.seek(0); return buf.getvalue()
-
-def gerar_excel_tanque(df_ent: pd.DataFrame, df_sai: pd.DataFrame, nome_tanque: str, periodo: str, obra: str) -> bytes:
-    dias_pt = {0:"SEG",1:"TER",2:"QUA",3:"QUI",4:"SEX",5:"SÁB",6:"DOM"}
-    import xlsxwriter
-    buf=io.BytesIO(); wb=xlsxwriter.Workbook(buf); ws=wb.add_worksheet("Tanque")
-    fh  = wb.add_format({"bold":True,"font_size":9,"border":1,"align":"center","bg_color":"#BDD7EE","text_wrap":True})
-    fd  = wb.add_format({"font_size":9,"border":1,"align":"center"})
-    fn  = wb.add_format({"font_size":9,"border":1,"num_format":"#,##0.00","align":"right"})
-    fm  = wb.add_format({"font_size":9,"border":1,"num_format":'"R$" #,##0.00',"align":"right"})
-    fok = wb.add_format({"font_size":9,"border":1,"num_format":"#,##0.00","align":"right","font_color":"#3B6D11"})
-    flo = wb.add_format({"font_size":9,"border":1,"num_format":"#,##0.00","align":"right","font_color":"#854F0B"})
-    ft  = wb.add_format({"bold":True,"font_size":9,"border":1,"num_format":"#,##0.00","align":"right","bg_color":"#D9D9D9"})
-    ftx = wb.add_format({"bold":True,"font_size":9,"border":1,"align":"right","bg_color":"#D9D9D9"})
-    fti = wb.add_format({"bold":True,"font_size":11,"align":"center","bg_color":"#D9D9D9","border":1})
-    flb = wb.add_format({"bold":True,"font_size":9}); fvl=wb.add_format({"font_size":9})
-
-    ws.write(0,0,"OBRA:",flb); ws.write(0,2,obra.upper(),fvl)
-    ws.write(1,0,"TANQUE:",flb); ws.write(1,2,nome_tanque.upper(),fvl)
-    ws.write(2,0,"PERÍODO:",flb); ws.write(2,2,periodo.upper(),fvl)
-    ws.merge_range(3,0,3,14,f"CONTROLE DE TANQUE  —  {nome_tanque.upper()}",fti)
-
-    heads=["DATA","DIA","TIPO","FICHA","PLACA","PREF.","VEÍ./OPERADOR","PRODUTO / FORNEC.","KM/HOR","QTD ENTRADA (L)","QTD SAÍDA (L)","VL UNIT. (R$)","TOTAL (R$)","SALDO (L)","OBRA"]
-    widths=[12,7,8,10,10,8,25,22,8,14,12,12,12,12,20]
-    ws.set_row(4,30)
-    for ci,(h,w) in enumerate(zip(heads,widths)):
-        ws.write(4,ci,h,fh); ws.set_column(ci,ci,w)
-
-    movs=[]
-    if not df_ent.empty:
-        for _,r in df_ent.iterrows(): movs.append({**r.to_dict(),"_tipo":"Entrada"})
-    if not df_sai.empty:
-        for _,r in df_sai.iterrows(): movs.append({**r.to_dict(),"_tipo":"Saída"})
-    movs.sort(key=lambda x: str(x.get("data","")))
-
-    saldo=0.0; t_ent=0.0; t_sai=0.0
-    for ri,r in enumerate(movs,start=5):
-        dia_str=""
-        try: dia_str=dias_pt[datetime.strptime(str(r.get("data",""))[:10],"%Y-%m-%d").weekday()]
-        except: pass
-        qtd=float(r.get("quantidade",0) or 0); vunt=float(r.get("valor_unitario",0) or 0); tot=float(r.get("total",0) or 0)
-        tipo=r["_tipo"]
-        if tipo=="Entrada": saldo+=qtd; t_ent+=qtd
-        else:               saldo-=qtd; t_sai+=qtd
-        q_ent=qtd if tipo=="Entrada" else 0; q_sai=qtd if tipo=="Saída" else 0
-        forn_veic=r.get("fornecedor","") if tipo=="Entrada" else r.get("motorista","")
-        prod_forn=r.get("combustivel","") if tipo=="Entrada" else r.get("tipo_combustivel","")
-        ws.write(ri,0,str(r.get("data",""))[:10],fd); ws.write(ri,1,dia_str,fd)
-        ws.write(ri,2,tipo,fd); ws.write(ri,3,str(r.get("numero_ficha","")),fd)
-        ws.write(ri,4,str(r.get("placa","")),fd); ws.write(ri,5,str(r.get("prefixo","")),fd)
-        ws.write(ri,6,forn_veic,fd); ws.write(ri,7,prod_forn,fd)
-        ws.write(ri,8,str(r.get("horimetro","")),fd)
-        ws.write(ri,9,q_ent if q_ent else "",fn if q_ent else fd)
-        ws.write(ri,10,q_sai if q_sai else "",fn if q_sai else fd)
-        ws.write(ri,11,vunt,fm); ws.write(ri,12,tot,fm)
-        ws.write(ri,13,saldo,fok if saldo>=500 else flo)
-        ws.write(ri,14,str(r.get("obra","")),fd)
-
-    row_t=5+len(movs)
-    ws.write(row_t,0,"TOTAL",ftx); ws.merge_range(row_t,1,row_t,8,"",ftx)
-    ws.write(row_t,9,t_ent,ft); ws.write(row_t,10,t_sai,ft)
-    ws.write(row_t,11,"",ftx); ws.write(row_t,12,"",ftx)
-    ws.write(row_t,13,t_ent-t_sai,ft); ws.write(row_t,14,"",ftx)
-    wb.close(); buf.seek(0); return buf.getvalue()
-
-def gerar_excel_limpo(df: pd.DataFrame, nome_aba: str="Relatório") -> bytes:
-    df=df.fillna("").copy()
-    buf=io.BytesIO()
-    with pd.ExcelWriter(buf,engine="xlsxwriter") as w:
-        df.to_excel(w,index=False,sheet_name=nome_aba)
-        ws=w.sheets[nome_aba]
-        for i,col in enumerate(df.columns):
-            try:
-                sz=max(len(str(col)),df[col].astype(str).str.len().max())
-                ws.set_column(i,i,min(int(sz)+2,50))
-            except: ws.set_column(i,i,15)
-    return buf.getvalue()
-
-def gerar_pdf(df: pd.DataFrame, tipo: str, titulo_esq: str, sub_esq: str, per_esq: str, dados_dir: dict, titulo_tab: str) -> bytes:
-    df=df.fillna("").copy()
-    pdf=FPDF(orientation="L",unit="mm",format="A4"); pdf.add_page()
-    pdf.rect(10,10,110,22)
-    x=12
-    if os.path.exists("logo.png"):
-        try: pdf.image("logo.png",x=12,y=12,h=18); x=48
-        except: pass
-    pdf.set_xy(x,12); pdf.set_font("Arial","B",9)
-    pdf.cell(0,6,titulo_esq.upper(),ln=1)
-    pdf.set_x(x); pdf.cell(0,6,sub_esq.upper(),ln=1)
-    pdf.set_x(x); pdf.cell(0,6,per_esq.upper(),ln=1)
-    pdf.rect(125,10,162,22); pdf.set_xy(127,12); pdf.set_font("Arial","B",9)
-    for i,(k,v) in enumerate(dados_dir.items()):
-        if i%2==0: pdf.set_x(127); pdf.cell(80,5,f"{k}: {v}")
-        else:       pdf.cell(80,5,f"{k}: {v}",ln=1)
-    pdf.set_y(35); pdf.set_font("Arial","B",10)
-    pdf.cell(277,8,titulo_tab.upper(),border=1,align="C",ln=1)
-    pdf.set_font("Arial","B",7); pdf.set_fill_color(220,220,220)
-
-    if tipo=="SAIDAS":
-        cols=[("DATA",16),("FICHA",15),("PLACA",14),("PREF.",12),("MÁQUINA / MOTORISTA",52),("PRODUTO",18),("QTD (L)",14),("V.UNIT.",14),("TOTAL (R$)",20),("KM/HOR",13),("OBS",69)]
-    elif tipo=="TANQUE":
-        cols=[("DATA",14),("TIPO",10),("FICHA",14),("PLACA",13),("PREF.",10),("OPERADOR / FORNEC.",40),("PRODUTO",16),("KM/H",10),("ENTRADA(L)",17),("SAÍDA(L)",14),("V.UNIT.",13),("TOTAL",15),("SALDO(L)",14),("OBS",37)]
-    else:
-        cols=[("DATA",18),("NF/FICHA",22),("DISTRIBUIDORA",60),("TANQUE",42),("PRODUTO",22),("QTD (L)",20),("V.UNIT.",20),("TOTAL (R$)",23),("OBS",30)]
-
-    for n,w in cols: pdf.cell(w,7,n,border=1,align="C",fill=True)
-    pdf.ln(); pdf.set_font("Arial","",7)
-    t_l=0.0; t_r=0.0; saldo=0.0
-
-    for _,r in df.iterrows():
-        q=float(r.get("quantidade",0) or 0); v=float(r.get("valor_unitario",0) or 0); t=float(r.get("total",0) or 0)
-        qe=float(r.get("qtd_entrada",0) or 0); qs=float(r.get("qtd_saida",0) or 0)
-        saldo+=qe-qs
-        if tipo=="SAIDAS":
-            for val,w in [(str(r.get("data",""))[:10],16),(str(r.get("numero_ficha",""))[:14],15),(str(r.get("placa",""))[:8],14),(str(r.get("prefixo",""))[:8],12),(str(r.get("motorista",""))[:33],52),(str(r.get("tipo_combustivel",""))[:12],18)]:
-                pdf.cell(w,6,val,border=1,align="C")
-            pdf.cell(14,6,f"{q:,.2f}",border=1,align="R"); pdf.cell(14,6,f"{v:,.2f}",border=1,align="R")
-            pdf.cell(20,6,f"R${t:,.2f}",border=1,align="R"); pdf.cell(13,6,str(r.get("horimetro",""))[:7],border=1,align="C")
-            pdf.cell(69,6,str(r.get("observacao",""))[:40],border=1,align="L"); t_l+=q; t_r+=t
-        elif tipo=="TANQUE":
-            pdf.cell(14,6,str(r.get("data",""))[:10],border=1,align="C")
-            pdf.cell(10,6,str(r.get("tipo",""))[:6],border=1,align="C")
-            pdf.cell(14,6,str(r.get("numero_ficha",""))[:12],border=1,align="C")
-            pdf.cell(13,6,str(r.get("placa",""))[:7],border=1,align="C")
-            pdf.cell(10,6,str(r.get("prefixo",""))[:7],border=1,align="C")
-            pdf.cell(40,6,str(r.get("motorista_forn",""))[:25],border=1,align="L")
-            pdf.cell(16,6,str(r.get("produto",""))[:10],border=1,align="C")
-            pdf.cell(10,6,str(r.get("horimetro",""))[:7],border=1,align="C")
-            pdf.cell(17,6,f"{qe:,.1f}" if qe else "-",border=1,align="R")
-            pdf.cell(14,6,f"{qs:,.1f}" if qs else "-",border=1,align="R")
-            pdf.cell(13,6,f"{v:,.2f}",border=1,align="R"); pdf.cell(15,6,f"R${t:,.2f}",border=1,align="R")
-            pdf.cell(14,6,f"{saldo:,.1f}",border=1,align="R")
-            pdf.cell(37,6,str(r.get("observacao",""))[:22],border=1,align="L"); t_l+=(qe or qs); t_r+=t
-        else:
-            pdf.cell(18,6,str(r.get("data",""))[:10],border=1,align="C")
-            pdf.cell(22,6,str(r.get("numero_ficha",""))[:14],border=1,align="C")
-            pdf.cell(60,6,str(r.get("fornecedor",""))[:38],border=1,align="L")
-            pdf.cell(42,6,str(r.get("nome_tanque",""))[:25],border=1,align="C")
-            pdf.cell(22,6,str(r.get("combustivel",""))[:12],border=1,align="C")
-            pdf.cell(20,6,f"{q:,.2f}",border=1,align="R"); pdf.cell(20,6,f"{v:,.2f}",border=1,align="R")
-            pdf.cell(23,6,f"R${t:,.2f}",border=1,align="R"); pdf.cell(30,6,str(r.get("observacao",""))[:18],border=1,align="L")
-            t_l+=q; t_r+=t
-        pdf.ln()
-
-    pdf.set_font("Arial","B",8)
-    if tipo=="SAIDAS":
-        pdf.cell(136,8,"TOTAIS GERAIS",border=1,align="R"); pdf.cell(14,8,f"{t_l:,.2f}",border=1,align="R")
-        pdf.cell(14,8,"-",border=1,align="C"); pdf.cell(20,8,f"R$ {t_r:,.2f}",border=1,align="R"); pdf.cell(82,8,"",border=1)
-    elif tipo=="TANQUE":
-        pdf.cell(138,8,"TOTAIS",border=1,align="R"); pdf.cell(17,8,f"{t_l:,.2f}",border=1,align="R")
-        pdf.cell(14,8,"-",border=1,align="C"); pdf.cell(13,8,"-",border=1,align="C")
-        pdf.cell(15,8,f"R$ {t_r:,.2f}",border=1,align="R"); pdf.cell(14,8,f"{saldo:,.1f}",border=1,align="R"); pdf.cell(37,8,"",border=1)
-    else:
-        pdf.cell(167,8,"TOTAIS GERAIS",border=1,align="R"); pdf.cell(20,8,f"{t_l:,.2f}",border=1,align="R")
-        pdf.cell(20,8,"-",border=1,align="C"); pdf.cell(23,8,f"R$ {t_r:,.2f}",border=1,align="R"); pdf.cell(30,8,"",border=1)
-
-    return pdf.output(dest="S").encode("latin-1")
-
-# ═══════════════════════════════════════════════════════════════════
-# LOGIN — ESTRUTURA VISUAL E CSS CONDICIONAL
+# LOGIN
 # ═══════════════════════════════════════════════════════════════════
 for k,v in [("logged_in",False),("usuario_logado",""),("perfil_logado","")]:
     if k not in st.session_state: st.session_state[k]=v
-
-import psutil
 
 if not st.session_state.logged_in:
     st.markdown("""
     <style>
     [data-testid="stAppViewContainer"] {
         background: linear-gradient(rgba(15, 25, 35, 0.7), rgba(15, 25, 35, 0.7)), 
-        url('https://images.unsplash.com/photo-1463171379579-3fdfb86d6285?q=80&w=2070') 
-        no-repeat center center fixed !important;
+        url('https://images.unsplash.com/photo-1463171379579-3fdfb86d6285?q=80&w=2070') no-repeat center center fixed !important;
         background-size: cover !important;
     }
-
     [data-testid="stHeader"] { background: transparent !important; }
     [data-testid="stSidebar"] { display: none; }
-
-    /* 🔥 REMOVE ESPAÇOS EXAGERADOS */
-    div[data-testid="stForm"] {
-        margin-top: -20px;
-    }
-
-    img {
-        margin-bottom: -15px;
-    }
+    div[data-testid="stForm"] { margin-top: -20px; }
+    img { margin-bottom: -15px; }
     </style>
     """, unsafe_allow_html=True)
     
-    # 🔥 MENOS ESPAÇO NO TOPO
     st.write("<br>", unsafe_allow_html=True)
-
     c1, c2, c3 = st.columns([1, 2.5, 1])
-
     with c2:
         with st.form("login"):
             if os.path.exists("logo.png"): 
@@ -425,19 +165,9 @@ if not st.session_state.logged_in:
                     st.image("logo.png", width=280)
                     st.markdown("<div style='margin-top:-25px'></div>", unsafe_allow_html=True)
             
-            st.markdown("""
-            <h2 style='text-align:center;
-                       color:#1E293B;
-                       font-weight:700;
-                       margin-top:0;
-                       margin-bottom:0.3rem;'>
-                Acesso Restrito
-            </h2>
-            """, unsafe_allow_html=True)
-
+            st.markdown("<h2 style='text-align:center; color:#1E293B; font-weight:700; margin-top:0; margin-bottom:0.3rem;'>Acesso Restrito</h2>", unsafe_allow_html=True)
             u = st.text_input("Usuário")
             p = st.text_input("Senha", type="password")
-            
             st.write("<br>", unsafe_allow_html=True)
 
             if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
@@ -458,89 +188,41 @@ if not st.session_state.logged_in:
                         st.rerun()
                     else:
                         st.error("❌ Usuário ou senha incorretos.")
-
     st.stop()
 
 # ═══════════════════════════════════════════════════════════════════
-# SIDEBAR
+# SIDEBAR / MENU
 # ═══════════════════════════════════════════════════════════════════
 with st.sidebar:
-    
-    # LOGO CENTRALIZADA E MAIOR
     if os.path.exists("logo.png"):
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.image("logo.png", width=300)
 
-    # USUÁRIO LOGADO
-    st.markdown(
-        f"<div style='text-align:center;color:#1D9E75;font-size:13px;font-weight:bold;'>👤 {st.session_state.usuario_logado}</div>",
-        unsafe_allow_html=True
-    )
-    
+    st.markdown(f"<div style='text-align:center;color:#1D9E75;font-size:13px;font-weight:bold;'>👤 {st.session_state.usuario_logado}</div>", unsafe_allow_html=True)
     st.divider()
     
-    # MENU
     opcoes = [
-        "🏠 Painel Início",
-        "⛽ Lançar Abastecimento",
-        "🛢️ Tanques / Estoque",
-        "🚚 Boletim de Transporte",
-        "🚜 Frota e Equipamentos",
-        "🏪 Fornecedores",
-        "📋 Relatórios e Fechamentos"
+        "🏠 Painel Início", "⛽ Lançar Abastecimento", "🛢️ Tanques / Estoque", 
+        "🚚 Boletim de Transporte", "🚜 Frota e Equipamentos", "🏪 Fornecedores", "📋 Relatórios e Fechamentos"
     ]
-
     if st.session_state.perfil_logado == "Admin":
         opcoes.append("👥 Usuários e Acessos")
 
     menu = st.radio("", opcoes, label_visibility="collapsed")
-
     st.divider()
-
-    # ESPAÇO PARA EMPURRAR O BOTÃO PARA O FINAL
     st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
-
-    # BOTÃO DE SAIR (DISCRETO)
     if st.button("Sair"):
         st.session_state.logged_in = False
         st.session_state.usuario_logado = ""
         st.session_state.perfil_logado = ""
         st.rerun()
-
-    # RODAPÉ
     st.caption("☁️ Supabase — Tempo Real")
-# ════════════════════════════════════════════════════════════════════
-# 1 · PAINEL INÍCIO
-# ════════════════════════════════════════════════════════════════════
-# ════════════════════════════════════════════════════════════════════
-# SISTEMA COMPLETO - PAINEL + ABASTECIMENTO (VERSÃO MELHORADA)
-# ════════════════════════════════════════════════════════════════════
-
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from datetime import date
 
 # ════════════════════════════════════════════════════════════════════
-# FUNÇÕES GLOBAIS
+# 1 · PAINEL INÍCIO (COM O GRÁFICO CORRIGIDO)
 # ════════════════════════════════════════════════════════════════════
-
-@st.cache_data(ttl=60)
-def get_data(tabela):
-    try:
-        res = supabase.table(tabela).select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
-    except Exception as e:
-        st.error(f"Erro ao buscar {tabela}: {e}")
-        return pd.DataFrame()
-
-# ════════════════════════════════════════════════════════════════════
-# 1 · PAINEL INÍCIO
-# ════════════════════════════════════════════════════════════════════
-
 if menu == "🏠 Painel Início":
-
     st.markdown("## 🏠 Centro de Comando")
 
     with st.spinner("Carregando dados..."):
@@ -548,116 +230,57 @@ if menu == "🏠 Painel Início":
         df_ab   = get_data("abastecimentos")
         df_prod = get_data("producao")
 
-    # ═══════════════════════════════════════════════
     # TANQUES
-    # ═══════════════════════════════════════════════
-
     if not df_tanq.empty:
         st.subheader("🛢️ Situação dos Tanques / Comboios")
-
         cols_t = st.columns(min(len(df_tanq), 5))
-
-        saldos = {
-            row["nome"]: calcular_saldo(row["nome"])
-            for _, row in df_tanq.iterrows()
-        }
+        saldos = {row["nome"]: calcular_saldo(row["nome"]) for _, row in df_tanq.iterrows()}
 
         for idx, row in df_tanq.iterrows():
-
             nm = row["nome"]
             cap = float(row.get("capacidade", 0) or 0)
             sd = saldos.get(nm, 0)
-
             lim = cap * 0.15 if cap > 0 else 500
             low = sd <= lim
-
             cls = "banner-low" if low else "banner-ok"
             ic = "⚠️" if low else "✅"
             pct = f" / {sd/cap*100:.0f}%" if cap > 0 else ""
 
             with cols_t[idx % len(cols_t)]:
-
-                st.markdown(
-                    f"<div class='{cls}'>{ic} <strong>{nm}</strong><br>{sd:,.1f} L{pct}</div>",
-                    unsafe_allow_html=True
-                )
-
+                st.markdown(f"<div class='{cls}'>{ic} <strong>{nm}</strong><br>{sd:,.1f} L{pct}</div>", unsafe_allow_html=True)
                 if cap > 0:
                     st.progress(min(sd/cap, 1.0))
-
         st.divider()
 
-    # ═══════════════════════════════════════════════
     # FILTRO PERÍODO
-    # ═══════════════════════════════════════════════
-
     st.markdown("#### 📅 Indicadores do Período")
-
     c1, c2 = st.columns(2)
     d_ini = c1.date_input("De", value=date.today().replace(day=1))
     d_fim = c2.date_input("Até", value=date.today())
 
-    # ═══════════════════════════════════════════════
-    # INICIALIZAÇÃO
-    # ═══════════════════════════════════════════════
+    t_gasto = 0; t_litros = 0; t_carradas = 0; t_ton = 0; t_ton_cbuq = 0
 
-    t_gasto = 0
-    t_litros = 0
-    t_carradas = 0
-    t_ton = 0
-    t_ton_cbuq = 0
-
-    # ═══════════════════════════════════════════════
     # ABASTECIMENTOS
-    # ═══════════════════════════════════════════════
-
     if not df_ab.empty and "data" in df_ab.columns:
-
         df_ab["data_dt"] = pd.to_datetime(df_ab["data"], errors="coerce")
-
-        daf = df_ab[
-            (df_ab["data_dt"].notna()) &
-            (df_ab["data_dt"].dt.date >= d_ini) &
-            (df_ab["data_dt"].dt.date <= d_fim)
-        ]
-
+        daf = df_ab[(df_ab["data_dt"].notna()) & (df_ab["data_dt"].dt.date >= d_ini) & (df_ab["data_dt"].dt.date <= d_fim)]
         if not daf.empty:
             t_gasto = pd.to_numeric(daf.get("total", 0), errors="coerce").sum()
             t_litros = pd.to_numeric(daf.get("quantidade", 0), errors="coerce").sum()
 
-    # ═══════════════════════════════════════════════
     # PRODUÇÃO
-    # ═══════════════════════════════════════════════
-
     if not df_prod.empty and "data" in df_prod.columns:
-
         df_prod["data_dt"] = pd.to_datetime(df_prod["data"], errors="coerce")
-
-        dpf = df_prod[
-            (df_prod["data_dt"].notna()) &
-            (df_prod["data_dt"].dt.date >= d_ini) &
-            (df_prod["data_dt"].dt.date <= d_fim)
-        ]
-
+        dpf = df_prod[(df_prod["data_dt"].notna()) & (df_prod["data_dt"].dt.date >= d_ini) & (df_prod["data_dt"].dt.date <= d_fim)]
         if not dpf.empty:
-
             t_carradas = pd.to_numeric(dpf.get("carradas", 0), errors="coerce").sum()
             t_ton = pd.to_numeric(dpf.get("toneladas", 0), errors="coerce").sum()
-
-            dc = dpf[dpf.get("tipo_operacao", "").isin([
-                "Transporte de Massa/CBUQ",
-                "Venda de Massa"
-            ])]
-
+            dc = dpf[dpf.get("tipo_operacao", "").isin(["Transporte de Massa/CBUQ", "Venda de Massa"])]
             if not dc.empty:
                 t_ton_cbuq = pd.to_numeric(dc.get("toneladas", 0), errors="coerce").sum()
 
-    # ═══════════════════════════════════════════════
     # KPIs
-    # ═══════════════════════════════════════════════
-
     c1, c2, c3, c4 = st.columns(4)
-
     c1.metric("💰 Gasto Combustível", f"R$ {t_gasto:,.2f}")
     c2.metric("⛽ Litros", f"{t_litros:,.1f} L")
     c3.metric("🏗️ Ton CBUQ", f"{t_ton_cbuq:,.1f} t")
@@ -665,31 +288,17 @@ if menu == "🏠 Painel Início":
 
     st.divider()
     st.markdown("#### ⚙️ KPIs de Eficiência")
-
     c5, c6, c7 = st.columns(3)
-
     custo_ton = t_gasto / t_ton_cbuq if t_ton_cbuq > 0 else 0
     litros_ton = t_litros / t_ton_cbuq if t_ton_cbuq > 0 else 0
     litros_vg = t_litros / t_carradas if t_carradas > 0 else 0
-
     c5.metric("Custo / Ton CBUQ", f"R$ {custo_ton:,.2f}")
     c6.metric("Litros / Ton", f"{litros_ton:,.2f} L")
     c7.metric("Litros / Viagem", f"{litros_vg:,.1f} L")
 
-    # ═══════════════════════════════════════════════
-    # GRÁFICO
-    # ═══════════════════════════════════════════════
-
+    # GRÁFICO (AGORA CORRIGIDO E FUNCIONAL)
     if not df_ab.empty:
-
-        df_ab["data_dt"] = pd.to_datetime(df_ab["data"], errors="coerce")
-
-        df_filtrado = df_ab[
-            (df_ab["data_dt"].notna()) &
-            (df_ab["data_dt"].dt.date >= d_ini) &
-            (df_ab["data_dt"].dt.date <= d_fim)
-        ]
-
+        df_filtrado = df_ab[(df_ab["data_dt"].notna()) & (df_ab["data_dt"].dt.date >= d_ini) & (df_ab["data_dt"].dt.date <= d_fim)]
         df_filtrado["Mês"] = df_filtrado["data_dt"].dt.strftime("%m/%Y")
         df_filtrado["total_n"] = pd.to_numeric(df_filtrado.get("total", 0), errors="coerce").fillna(0)
 
@@ -697,10 +306,20 @@ if menu == "🏠 Painel Início":
 
         if not g.empty:
             st.subheader("📊 Gastos por Mês")
-
-            fig = px.bar(g, x="Mês", y="total_n")
+            fig = px.bar(
+                g, x="Mês", y="total_n", text="total_n",
+                labels={"total_n": "Total Gasto (R$)", "Mês": "Mês/Ano"},
+                color_discrete_sequence=["#0A58CA"]
+            )
+            fig.update_traces(texttemplate='R$ %{text:,.2f}', textposition='outside', marker_line_width=0)
+            fig.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                margin=dict(t=20, b=20, l=0, r=0),
+                xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor="#E2E8F0", tickformat=",.2f")
+            )
             st.plotly_chart(fig, use_container_width=True)
-
+        else:
+            st.info("ℹ️ Nenhum abastecimento registrado para o período selecionado.")
 
 # ════════════════════════════════════════════════════════════════════
 # 2 · LANÇAR ABASTECIMENTO
