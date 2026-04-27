@@ -713,32 +713,7 @@ elif menu=="🚚 Boletim de Transporte":
 # ════════════════════════════════════════════════════════════════════
 # 5 · FROTA E EQUIPAMENTOS
 # ════════════════════════════════════════════════════════════════════
-elif menu=="🚜 Frota e Equipamentos":
-    st.markdown("## 🚜 Gestão de Frota")
-    df_v=get_data("veiculos")
-    with st.expander("➕ CADASTRAR NOVO VEÍCULO / MÁQUINA",expanded=True):
-        with st.form("f_v",clear_on_submit=True):
-            c1,c2,c3=st.columns(3)
-            pref=c1.text_input("Código / Prefixo (Ex: CA-01)")
-            plc=c2.text_input("Placa")
-            tipo=c3.selectbox("Tipo",["Caçamba","Caminhão Pipa","Vassoura","Fresadora","Vibroacabadora","Rolo Compactador","Pá Carregadeira","Veículo Leve"])
-            c4,c5,c6=st.columns(3)
-            mod=c4.text_input("Marca / Modelo")
-            mot=c5.text_input("Motorista / Operador Fixo")
-            comb=c6.selectbox("Combustível Padrão",["Diesel S10","Diesel S500","Gasolina Comum"])
-            if st.form_submit_button("💾 Salvar Veículo",use_container_width=True):
-                if pref:
-                    ok=insert_data("veiculos",{"prefixo":pref.upper(),"placa":plc.upper(),"tipo":tipo,"modelo":mod.upper(),"motorista":mot.upper(),"tipo_combustivel_padrao":comb,"criado_por":st.session_state.usuario_logado})
-                    if ok: st.success("✅ Salvo!"); time.sleep(1); st.rerun()
-                else: st.error("⚠️ Prefixo é obrigatório.")
 
-    if not df_v.empty:
-        st.divider(); st.subheader("📋 Frota Ativa")
-        for _,r in df_v.iterrows():
-            cc1,cc2=st.columns([5,1])
-            cc1.markdown(f"**{r['prefixo']}** - {r.get('tipo','')} | Placa: {r.get('placa','')} | Operador: {r.get('motorista','')}")
-            if cc2.button("❌ Excluir",key=f"d_v_{r['id']}"):
-                if delete_data("veiculos",r["id"]): st.rerun()
 
 # ════════════════════════════════════════════════════════════════════
 # 6 · FORNECEDORES
