@@ -104,6 +104,13 @@ def get_data(table: str) -> pd.DataFrame:
         res = supabase.table(table).select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except Exception as e:
+        # Erro PGRST205 significa que a tabela não existe no banco
+        error_msg = str(e)
+        if "PGRST205" in error_msg or "Could not find the table" in error_msg:
+            # Silencia o erro técnico e apenas loga no console se necessário
+            # Retorna DataFrame vazio para o app não quebrar
+            return pd.DataFrame()
+        
         st.warning(f"⚠️ Erro ao buscar {table}: {e}")
         return pd.DataFrame()
 
@@ -811,7 +818,7 @@ elif menu == "⛽ Lançar Abastecimento":
     df_t = get_data("tanques")
 
     if df_v.empty:
-        st.warning("⚠️ Cadastre veículos primeiro.")
+        st.warning("⚠️ Cadastre veículos primeiro ou verifique se a tabela 'veiculos' existe no Supabase.")
         st.stop()
 
     # Proteção de colunas
@@ -848,6 +855,9 @@ elif menu == "⛽ Lançar Abastecimento":
         st.markdown(f"<div class='{cor}'>🛢️ Saldo atual de <strong>{n_tanq_preview}</strong>: <strong>{saldo_tanque_atual:,.1f} L</strong></div>", unsafe_allow_html=True)
 
     obras_lista = lista_obras()
+    
+    if not obras_lista:
+        st.info("💡 Dica: Cadastre suas obras na aba '🏗️ Obras' para ter rastreabilidade total.")
 
     with st.form("form_ab", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
@@ -1029,6 +1039,9 @@ elif menu == "🔄 Transferência Caminhão-Tanque":
     df_ct = pd.DataFrame()
     if not df_v.empty and "tipo_veiculo" in df_v.columns:
         df_ct = df_v[df_v["tipo_veiculo"] == "Caminhão-Tanque"]
+    
+    if df_tr.empty and not df_v.empty and "tipo_veiculo" not in df_v.columns:
+        st.error("⚠️ A tabela 'veiculos' precisa da coluna 'tipo_veiculo'. Execute o comando SQL fornecido.")
 
     obras_lista = lista_obras()
 
@@ -1264,7 +1277,7 @@ elif menu == "🚚 Boletim de Transporte":
     st.markdown("## 🚚 Boletim Diário de Produção")
     df_v = get_data("veiculos")
     if df_v.empty:
-        st.warning("⚠️ Cadastre veículos primeiro.")
+        st.warning("⚠️ Cadastre veículos primeiro ou verifique se a tabela 'veiculos' existe no Supabase.")
         st.stop()
 
     obras_lista = lista_obras()
