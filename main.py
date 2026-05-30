@@ -237,21 +237,43 @@ def get_data(table: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=120)
+def _coluna_existe(tabela: str, coluna: str) -> bool:
+    """
+    Testa se uma coluna existe tentando fazer SELECT dela.
+    Retorna False apenas para erro PGRST204 (coluna não encontrada).
+    """
+    try:
+        supabase.table(tabela).select(coluna).limit(1).execute()
+        return True
+    except Exception as e:
+        err = str(e)
+        # PGRST204 = coluna não encontrada no schema cache
+        if "PGRST204" in err or (
+            "Could not find" in err and "column" in err and tabela in err
+        ):
+            return False
+        # Qualquer outro erro (ex: tabela vazia, RLS, etc.) assume que existe
+        return True
+
+
+@st.cache_data(ttl=15)
 def tabelas_ausentes() -> list[str]:
+    """Retorna lista de tabelas que não existem no banco."""
     ausentes = []
     for t in TABELAS_REQUERIDAS:
         try:
             supabase.table(t).select("id").limit(1).execute()
-        except Exception:
-            ausentes.append(t)
+        except Exception as e:
+            if "schema cache" in str(e) or "Could not find" in str(e):
+                ausentes.append(t)
     return ausentes
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=15)
 def colunas_ausentes() -> dict[str, list[str]]:
     """
-    Verifica colunas críticas em tabelas existentes.
+    Testa cada coluna crítica individualmente via SELECT.
+    Funciona mesmo com tabelas vazias.
     Retorna {tabela: [colunas_ausentes]}.
     """
     checks = {
@@ -262,18 +284,15 @@ def colunas_ausentes() -> dict[str, list[str]]:
     }
     resultado = {}
     for tabela, colunas in checks.items():
+        # Só verifica tabelas que existem
         try:
-            res = supabase.table(tabela).select("*").limit(1).execute()
-            if res.data:
-                existentes = set(res.data[0].keys())
-            else:
-                # Tabela existe mas vazia — tenta via insert vazio para checar schema
-                existentes = set()
-            faltam = [c for c in colunas if c not in existentes]
-            if faltam and res.data is not None:
-                resultado[tabela] = faltam
+            supabase.table(tabela).select("id").limit(1).execute()
         except Exception:
-            pass  # Tabela ausente já é detectada por tabelas_ausentes()
+            continue  # Tabela ausente — tratada por tabelas_ausentes()
+
+        faltam = [col for col in colunas if not _coluna_existe(tabela, col)]
+        if faltam:
+            resultado[tabela] = faltam
     return resultado
 
 
@@ -618,16 +637,23 @@ with st.sidebar:
         _, lc, _ = st.columns([1,2,1])
         with lc: st.image("logo.png", width=180)
 
-    ausentes = tabelas_ausentes()
-    cols_aus = colunas_ausentes()
+    ausentes  = tabelas_ausentes()
+    cols_aus  = colunas_ausentes()
     tem_problema = bool(ausentes or cols_aus)
+
     if tem_problema:
         n = len(ausentes) + sum(len(v) for v in cols_aus.values())
         st.markdown(f"""
         <div style='background:#7F1D1D;color:#FCA5A5;border-radius:5px;
                     padding:8px 12px;font-size:11px;font-weight:600;margin:.5rem 0;'>
           ⚠ {n} problema(s) no banco<br>
-          <span style='font-weight:400;opacity:.8'>Veja Setup do Banco</span>
+          <span style='font-weight:400;opacity:.8'>Acesse Setup do Banco</span>
+        </div>""", unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style='background:#14532D;color:#86EFAC;border-radius:5px;
+                    padding:6px 12px;font-size:11px;font-weight:600;margin:.5rem 0;'>
+          ✓ Banco configurado
         </div>""", unsafe_allow_html=True)
 
     st.markdown(f"""
@@ -670,27 +696,33 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════
 if menu == "Setup do Banco de Dados":
     st.markdown("## Setup do Banco de Dados")
-    ausentes  = tabelas_ausentes()
-    cols_aus  = colunas_ausentes()
+
+    with st.spinner("Verificando estrutura do banco..."):
+        ausentes  = tabelas_ausentes()
+        cols_aus  = colunas_ausentes()
 
     if not ausentes and not cols_aus:
-        av("Banco de dados configurado corretamente. O sistema está pronto para uso.", "ok")
+        av("✓ Banco de dados totalmente configurado. Todos os módulos estão disponíveis.", "ok")
+        st.markdown("Você pode navegar pelo sistema normalmente. Este item sumirá do menu na próxima verificação automática (a cada 15 segundos).")
+        if st.button("Recarregar verificação", use_container_width=False):
+            _clear(); st.rerun()
     else:
+        # Mostra o que está faltando
         if ausentes:
             av(f"Tabelas ausentes: <strong>{', '.join(ausentes)}</strong>", "er")
         if cols_aus:
             for tab, cols in cols_aus.items():
                 av(f"Coluna(s) ausente(s) em <strong>{tab}</strong>: {', '.join(f'<code>{c}</code>' for c in cols)}", "lo")
 
-        st.markdown("#### Como corrigir")
+        st.markdown("#### Como corrigir em 3 passos")
         st.markdown("""
-        1. Acesse seu projeto em [supabase.com](https://supabase.com)
-        2. Vá em **SQL Editor** no menu lateral
-        3. Cole o script abaixo e clique em **Run**
-        4. Volte aqui e clique em **Verificar novamente**
+        **1.** Acesse [supabase.com](https://supabase.com) → seu projeto → **SQL Editor**
 
-        > O script usa `IF NOT EXISTS` — é seguro rodar mesmo em banco já parcialmente configurado.
+        **2.** Cole o script abaixo e clique em **RUN** (botão verde no canto superior direito)
+
+        **3.** Volte aqui e clique em **Verificar novamente**
         """)
+        st.info("O script usa `IF NOT EXISTS` — é seguro rodar mesmo que algumas tabelas/colunas já existam.")
         st.code(SQL_CRIAR_TABELAS, language="sql")
 
         col_dl, col_ok = st.columns(2)
@@ -701,8 +733,9 @@ if menu == "Setup do Banco de Dados":
             mime="text/plain",
             use_container_width=True,
         )
-        if col_ok.button("Verificar novamente", use_container_width=True):
-            _clear(); st.rerun()
+        if col_ok.button("Verificar novamente", use_container_width=True, type="primary"):
+            _clear()
+            st.rerun()
 
 
 # ═══════════════════════════════════════════════════════
