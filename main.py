@@ -125,46 +125,98 @@ TABELAS_REQUERIDAS = [
 ]
 
 SQL_CRIAR_TABELAS = """
--- Execute no SQL Editor do Supabase (Settings → SQL Editor)
+-- ══════════════════════════════════════════════════════════════
+-- PavControl — Script de Setup do Banco de Dados
+-- Execute no SQL Editor do Supabase (aba "SQL Editor")
+-- É seguro rodar múltiplas vezes (IF NOT EXISTS / IF NOT EXISTS)
+-- ══════════════════════════════════════════════════════════════
+
+-- ── 1. NOVAS TABELAS ─────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS public.obras (
-    id BIGSERIAL PRIMARY KEY,
-    nome TEXT NOT NULL,
-    codigo TEXT DEFAULT '',
-    status TEXT DEFAULT 'Ativa',
-    local TEXT DEFAULT '',
+    id          BIGSERIAL PRIMARY KEY,
+    nome        TEXT NOT NULL,
+    codigo      TEXT DEFAULT '',
+    status      TEXT DEFAULT 'Ativa',
+    local       TEXT DEFAULT '',
     responsavel TEXT DEFAULT '',
-    observacao TEXT DEFAULT '',
-    criado_por TEXT DEFAULT '',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    observacao  TEXT DEFAULT '',
+    criado_por  TEXT DEFAULT '',
+    created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.transferencias_tanque (
-    id BIGSERIAL PRIMARY KEY,
-    data DATE,
-    numero_ficha TEXT DEFAULT '',
-    tanque_origem TEXT,
+    id              BIGSERIAL PRIMARY KEY,
+    data            DATE,
+    numero_ficha    TEXT DEFAULT '',
+    tanque_origem   TEXT,
     caminhao_tanque TEXT DEFAULT '',
-    placa TEXT DEFAULT '',
-    motorista TEXT DEFAULT '',
-    produto TEXT DEFAULT 'Diesel S10',
-    quantidade NUMERIC DEFAULT 0,
-    valor_unitario NUMERIC DEFAULT 0,
-    total NUMERIC DEFAULT 0,
-    obra TEXT DEFAULT '',
-    observacao TEXT DEFAULT '',
-    status TEXT DEFAULT 'ATIVO',
-    criado_por TEXT DEFAULT '',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    placa           TEXT DEFAULT '',
+    motorista       TEXT DEFAULT '',
+    produto         TEXT DEFAULT 'Diesel S10',
+    quantidade      NUMERIC DEFAULT 0,
+    valor_unitario  NUMERIC DEFAULT 0,
+    total           NUMERIC DEFAULT 0,
+    obra            TEXT DEFAULT '',
+    observacao      TEXT DEFAULT '',
+    status          TEXT DEFAULT 'ATIVO',
+    criado_por      TEXT DEFAULT '',
+    created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Habilitar Row Level Security (recomendado)
+-- ── 2. COLUNAS ADICIONAIS EM TABELAS EXISTENTES ──────────────
+-- (ADD COLUMN IF NOT EXISTS não quebra se já existir)
+
+ALTER TABLE public.veiculos
+    ADD COLUMN IF NOT EXISTS tipo_veiculo           TEXT DEFAULT 'Veículo',
+    ADD COLUMN IF NOT EXISTS tipo_combustivel_padrao TEXT DEFAULT 'Diesel S10',
+    ADD COLUMN IF NOT EXISTS motorista              TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS placa                  TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS categoria              TEXT DEFAULT 'Veículo',
+    ADD COLUMN IF NOT EXISTS criado_por             TEXT DEFAULT '';
+
+ALTER TABLE public.abastecimentos
+    ADD COLUMN IF NOT EXISTS origem      TEXT DEFAULT 'Posto Externo',
+    ADD COLUMN IF NOT EXISTS nome_tanque TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS status      TEXT DEFAULT 'ATIVO',
+    ADD COLUMN IF NOT EXISTS criado_por  TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS obra        TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS horimetro   NUMERIC DEFAULT 0;
+
+ALTER TABLE public.tanques
+    ADD COLUMN IF NOT EXISTS capacidade NUMERIC DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS criado_por TEXT DEFAULT '';
+
+ALTER TABLE public.entradas_tanque
+    ADD COLUMN IF NOT EXISTS obra        TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS criado_por  TEXT DEFAULT '';
+
+ALTER TABLE public.producao
+    ADD COLUMN IF NOT EXISTS tipo_operacao TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS origem        TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS destino       TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS km_saida      NUMERIC DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS km_chegada    NUMERIC DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS carradas      INTEGER DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS toneladas     NUMERIC DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS obra          TEXT DEFAULT '',
+    ADD COLUMN IF NOT EXISTS criado_por    TEXT DEFAULT '';
+
+-- ── 3. SEGURANÇA (Row Level Security) ────────────────────────
+
 ALTER TABLE public.obras ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transferencias_tanque ENABLE ROW LEVEL SECURITY;
 
--- Política permissiva para autenticados (ajuste conforme sua auth)
-CREATE POLICY "Acesso total" ON public.obras FOR ALL USING (true);
-CREATE POLICY "Acesso total" ON public.transferencias_tanque FOR ALL USING (true);
+-- Políticas permissivas (ajuste conforme sua autenticação)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='obras' AND policyname='Acesso total') THEN
+        CREATE POLICY "Acesso total" ON public.obras FOR ALL USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='transferencias_tanque' AND policyname='Acesso total') THEN
+        CREATE POLICY "Acesso total" ON public.transferencias_tanque FOR ALL USING (true);
+    END IF;
+END $$;
 """
 
 
@@ -196,25 +248,97 @@ def tabelas_ausentes() -> list[str]:
     return ausentes
 
 
+@st.cache_data(ttl=120)
+def colunas_ausentes() -> dict[str, list[str]]:
+    """
+    Verifica colunas críticas em tabelas existentes.
+    Retorna {tabela: [colunas_ausentes]}.
+    """
+    checks = {
+        "veiculos":       ["tipo_veiculo", "tipo_combustivel_padrao", "motorista", "placa", "categoria"],
+        "abastecimentos": ["origem", "nome_tanque", "status", "obra", "horimetro"],
+        "tanques":        ["capacidade"],
+        "producao":       ["tipo_operacao", "carradas", "toneladas", "obra"],
+    }
+    resultado = {}
+    for tabela, colunas in checks.items():
+        try:
+            res = supabase.table(tabela).select("*").limit(1).execute()
+            if res.data:
+                existentes = set(res.data[0].keys())
+            else:
+                # Tabela existe mas vazia — tenta via insert vazio para checar schema
+                existentes = set()
+            faltam = [c for c in colunas if c not in existentes]
+            if faltam and res.data is not None:
+                resultado[tabela] = faltam
+        except Exception:
+            pass  # Tabela ausente já é detectada por tabelas_ausentes()
+    return resultado
+
+
 def _clear():
     get_data.clear()
     tabelas_ausentes.clear()
+    colunas_ausentes.clear()
 
 
-def insert_data(table, data):
-    try:
-        supabase.table(table).insert(data).execute()
-        _clear(); return True
-    except Exception as e:
-        st.error(f"Erro ao salvar: {e}"); return False
+def _col_erro(err_str: str) -> str | None:
+    """Extrai o nome da coluna de um erro PGRST204 (coluna não encontrada)."""
+    import re
+    m = re.search(r"find the '([^']+)' column", err_str)
+    return m.group(1) if m else None
 
 
-def update_data(table, row_id, data):
-    try:
-        supabase.table(table).update(data).eq("id", row_id).execute()
-        _clear(); return True
-    except Exception as e:
-        st.error(f"Erro ao atualizar: {e}"); return False
+def insert_data(table: str, data: dict) -> bool:
+    """
+    Insere dados removendo automaticamente colunas que não existem na tabela.
+    Tenta o insert completo; se falhar por coluna ausente (PGRST204),
+    remove a coluna problemática e tenta novamente (até 8 tentativas).
+    """
+    payload = dict(data)
+    for _ in range(8):
+        try:
+            supabase.table(table).insert(payload).execute()
+            _clear()
+            return True
+        except Exception as e:
+            err = str(e)
+            col = _col_erro(err)
+            if col and col in payload:
+                # Remove silenciosamente a coluna ausente e tenta de novo
+                payload.pop(col)
+                continue
+            # Erro diferente — mostra para o usuário
+            if "schema cache" in err or "Could not find" in err:
+                st.error(
+                    f"Coluna ou tabela não encontrada: `{err}`  \n"
+                    "👉 Acesse **Setup do Banco de Dados** no menu lateral e execute o script SQL."
+                )
+            else:
+                st.error(f"Erro ao salvar: {e}")
+            return False
+    st.error("Não foi possível salvar: muitas colunas ausentes na tabela. Execute o script SQL no Setup.")
+    return False
+
+
+def update_data(table: str, row_id, data: dict) -> bool:
+    """Atualiza removendo automaticamente colunas que não existem."""
+    payload = dict(data)
+    for _ in range(8):
+        try:
+            supabase.table(table).update(payload).eq("id", row_id).execute()
+            _clear()
+            return True
+        except Exception as e:
+            err = str(e)
+            col = _col_erro(err)
+            if col and col in payload:
+                payload.pop(col)
+                continue
+            st.error(f"Erro ao atualizar: {e}")
+            return False
+    return False
 
 
 def delete_data(table, row_id):
@@ -495,11 +619,14 @@ with st.sidebar:
         with lc: st.image("logo.png", width=180)
 
     ausentes = tabelas_ausentes()
-    if ausentes:
+    cols_aus = colunas_ausentes()
+    tem_problema = bool(ausentes or cols_aus)
+    if tem_problema:
+        n = len(ausentes) + sum(len(v) for v in cols_aus.values())
         st.markdown(f"""
         <div style='background:#7F1D1D;color:#FCA5A5;border-radius:5px;
                     padding:8px 12px;font-size:11px;font-weight:600;margin:.5rem 0;'>
-          ⚠ {len(ausentes)} tabela(s) ausente(s)<br>
+          ⚠ {n} problema(s) no banco<br>
           <span style='font-weight:400;opacity:.8'>Veja Setup do Banco</span>
         </div>""", unsafe_allow_html=True)
 
@@ -522,7 +649,7 @@ with st.sidebar:
         "Fornecedores",
         "Relatórios e Fechamentos",
     ]
-    if ausentes:
+    if ausentes or cols_aus:
         opcoes.append("Setup do Banco de Dados")
     if st.session_state.perfil_logado == "Admin":
         opcoes.append("Usuários e Acessos")
@@ -543,26 +670,38 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════
 if menu == "Setup do Banco de Dados":
     st.markdown("## Setup do Banco de Dados")
-    ausentes = tabelas_ausentes()
+    ausentes  = tabelas_ausentes()
+    cols_aus  = colunas_ausentes()
 
-    if not ausentes:
-        av("Todas as tabelas estão criadas. O sistema está pronto para uso.", "ok")
+    if not ausentes and not cols_aus:
+        av("Banco de dados configurado corretamente. O sistema está pronto para uso.", "ok")
     else:
-        av(f"As tabelas a seguir precisam ser criadas no Supabase: <strong>{', '.join(ausentes)}</strong>", "er")
-        st.markdown("#### Como criar")
+        if ausentes:
+            av(f"Tabelas ausentes: <strong>{', '.join(ausentes)}</strong>", "er")
+        if cols_aus:
+            for tab, cols in cols_aus.items():
+                av(f"Coluna(s) ausente(s) em <strong>{tab}</strong>: {', '.join(f'<code>{c}</code>' for c in cols)}", "lo")
+
+        st.markdown("#### Como corrigir")
         st.markdown("""
-        1. Acesse seu projeto no [supabase.com](https://supabase.com)
-        2. Vá em **SQL Editor** (menu lateral)
+        1. Acesse seu projeto em [supabase.com](https://supabase.com)
+        2. Vá em **SQL Editor** no menu lateral
         3. Cole o script abaixo e clique em **Run**
+        4. Volte aqui e clique em **Verificar novamente**
+
+        > O script usa `IF NOT EXISTS` — é seguro rodar mesmo em banco já parcialmente configurado.
         """)
         st.code(SQL_CRIAR_TABELAS, language="sql")
-        st.download_button(
+
+        col_dl, col_ok = st.columns(2)
+        col_dl.download_button(
             "Baixar script SQL",
             SQL_CRIAR_TABELAS,
-            file_name="criar_tabelas_pavcontrol.sql",
-            mime="text/plain"
+            file_name="setup_pavcontrol.sql",
+            mime="text/plain",
+            use_container_width=True,
         )
-        if st.button("Verificar novamente"):
+        if col_ok.button("Verificar novamente", use_container_width=True):
             _clear(); st.rerun()
 
 
@@ -1280,23 +1419,40 @@ elif menu == "Frota e Equipamentos":
         df_ab = df_ab[df_ab["status"] == "ATIVO"]
 
     with st.expander("Cadastrar novo veículo / equipamento", expanded=True):
-        with st.form("f_v",clear_on_submit=True):
+        # Detecta quais colunas existem na tabela veiculos
+        cols_v = set(df_v.columns.tolist()) if not df_v.empty else set()
+        tem_tipo_veiculo    = "tipo_veiculo"            in cols_v or df_v.empty
+        tem_comb_padrao     = "tipo_combustivel_padrao" in cols_v or df_v.empty
+        tem_motorista_col   = "motorista"               in cols_v or df_v.empty
+
+        with st.form("f_v", clear_on_submit=True):
             c1,c2,c3 = st.columns(3)
             pf_ = c1.text_input("Código / Prefixo")
             pl_ = c2.text_input("Placa")
-            ct_ = c3.selectbox("Categoria",["Veículo","Equipamento"])
+            ct_ = c3.selectbox("Categoria", ["Veículo","Equipamento"])
+
             c4,c5,c6 = st.columns(3)
             mt_ = c4.text_input("Motorista / Operador Fixo")
-            cb_ = c5.selectbox("Combustível Padrão",["Diesel S10","Diesel S500","Gasolina Comum"])
-            tv_ = c6.selectbox("Tipo",["Veículo","Equipamento","Caminhão-Tanque"])
-            if st.form_submit_button("Salvar",use_container_width=True):
+            cb_ = c5.selectbox("Combustível Padrão", ["Diesel S10","Diesel S500","Gasolina Comum"])
+            tv_ = c6.selectbox("Tipo", ["Veículo","Equipamento","Caminhão-Tanque"])
+
+            if st.form_submit_button("Salvar", use_container_width=True):
                 if pf_:
-                    if insert_data("veiculos",{
-                        "prefixo":pf_.upper(),"placa":pl_.upper(),"categoria":ct_,
-                        "motorista":mt_.upper(),"tipo_combustivel_padrao":cb_,"tipo_veiculo":tv_,
-                    }):
-                        st.success("Salvo."); st.rerun()
-                else: st.error("Prefixo obrigatório.")
+                    # Monta o payload com todas as colunas — insert_data remove automaticamente as ausentes
+                    payload = {
+                        "prefixo":                  pf_.upper(),
+                        "placa":                    pl_.upper(),
+                        "categoria":                ct_,
+                        "motorista":                mt_.upper(),
+                        "tipo_combustivel_padrao":  cb_,
+                        "tipo_veiculo":             tv_,
+                        "criado_por":               st.session_state.usuario_logado,
+                    }
+                    if insert_data("veiculos", payload):
+                        st.success("Salvo com sucesso.")
+                        st.rerun()
+                else:
+                    st.error("Prefixo obrigatório.")
 
     if not df_v.empty:
         st.markdown("<hr>", unsafe_allow_html=True)
