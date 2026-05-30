@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
-import os, io, hashlib, xlsxwriter
+import os, io, hashlib, xlsxwriter, base64
 from fpdf import FPDF
 
 # ═══════════════════════════════════════════════════════
@@ -571,61 +571,219 @@ for k,v in [("logged_in",False),("usuario_logado",""),("perfil_logado","")]:
     if k not in st.session_state: st.session_state[k] = v
 
 if not st.session_state.logged_in:
-    st.markdown("""
-    <style>
-    [data-testid="stAppViewContainer"] { background:#0F1C2E !important; }
-    [data-testid="stHeader"] { background:transparent !important; }
-    [data-testid="stSidebar"] { display:none; }
-    div[data-testid="stForm"] {
-        background:rgba(255,255,255,.97) !important;
-        border-radius:10px !important; padding:2.5rem !important;
-        box-shadow:0 24px 64px rgba(0,0,0,.5) !important;
-    }
-    </style>""", unsafe_allow_html=True)
 
-    st.write("<br><br>", unsafe_allow_html=True)
-    _, c2, _ = st.columns([1,2,1])
+    # Encode logo to base64 so it renders in pure HTML (sem container cinza do Streamlit)
+    _logo_b64 = ""
+    if os.path.exists("logo.png"):
+        with open("logo.png", "rb") as _f:
+            _logo_b64 = base64.b64encode(_f.read()).decode()
+    _logo_tag = (
+        f'<img src="data:image/png;base64,{_logo_b64}" '
+        f'style="height:56px;object-fit:contain;display:block;margin:0 auto 14px;">'
+        if _logo_b64 else
+        '<div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:-.02em;margin-bottom:12px;">COPA</div>'
+    )
+
+    st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+    html,body,[class*="css"] {{ font-family:'IBM Plex Sans',sans-serif; }}
+
+    /* Fundo da página */
+    [data-testid="stAppViewContainer"] {{
+        background: #0A1628 !important;
+        background-image:
+            radial-gradient(ellipse 80% 60% at 50% -10%, rgba(30,90,160,.35) 0%, transparent 70%),
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 39px,
+                rgba(255,255,255,.018) 39px,
+                rgba(255,255,255,.018) 40px
+            ),
+            repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 79px,
+                rgba(255,255,255,.018) 79px,
+                rgba(255,255,255,.018) 80px
+            ) !important;
+    }}
+    [data-testid="stHeader"]  {{ background:transparent !important; }}
+    [data-testid="stSidebar"] {{ display:none; }}
+
+    /* Remove padding padrão do main */
+    .main .block-container {{
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        max-width: 100% !important;
+    }}
+
+    /* Card do login — zero padding para controlar internamente */
+    div[data-testid="stForm"] {{
+        background: #FFFFFF !important;
+        border-radius: 0 0 14px 14px !important;
+        padding: 2rem 2.4rem 2.4rem !important;
+        box-shadow: none !important;
+        border: none !important;
+    }}
+
+    /* Labels dos campos */
+    .stTextInput > label {{
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        color: #94A3B8 !important;
+        text-transform: uppercase !important;
+        letter-spacing: .09em !important;
+        margin-bottom: 4px !important;
+    }}
+
+    /* Inputs */
+    div[data-baseweb="input"] {{
+        border-radius: 7px !important;
+        border: 1.5px solid #E2E8F0 !important;
+        background: #F8FAFC !important;
+        transition: border .15s ease !important;
+    }}
+    div[data-baseweb="input"]:focus-within {{
+        border-color: #1E3A5F !important;
+        background: #fff !important;
+        box-shadow: 0 0 0 3px rgba(30,58,95,.1) !important;
+    }}
+
+    /* Botão ENTRAR */
+    div.stButton > button:first-child {{
+        background: #1E3A5F !important;
+        color: #fff !important;
+        border: none !important;
+        border-radius: 7px !important;
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        letter-spacing: .1em !important;
+        text-transform: uppercase !important;
+        padding: .75rem !important;
+        margin-top: .4rem !important;
+        transition: background .15s ease, transform .1s ease !important;
+    }}
+    div.stButton > button:first-child:hover {{
+        background: #152E4D !important;
+        transform: translateY(-1px) !important;
+    }}
+    div.stButton > button:first-child:active {{
+        transform: translateY(0) !important;
+    }}
+
+    /* Card wrapper externo — controla shadow e border-radius geral */
+    .lg-wrap {{
+        max-width: 420px;
+        margin: 6vh auto 0;
+        border-radius: 14px;
+        box-shadow: 0 40px 100px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06);
+    }}
+
+    /* Header escuro do card */
+    .lg-head {{
+        background: linear-gradient(145deg, #0F1C2E 0%, #1a2f4e 100%);
+        padding: 2rem 2.4rem 1.6rem;
+        border-radius: 14px 14px 0 0;
+        text-align: center;
+        position: relative;
+    }}
+
+    .lg-product {{
+        font-size: 15px;
+        font-weight: 700;
+        color: #FFFFFF;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin-top: 0;
+    }}
+
+    .lg-tagline {{
+        font-size: 10px;
+        color: #4E7A9F;
+        font-weight: 500;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+        margin-top: 3px;
+    }}
+
+    .lg-bar {{
+        height: 2px;
+        background: linear-gradient(90deg, transparent 0%, #3DD6A3 40%, #1E9FD6 60%, transparent 100%);
+        margin-top: 1.4rem;
+        border-radius: 2px;
+    }}
+
+    /* Subtítulo acima dos campos */
+    .lg-form-title {{
+        font-size: 12px;
+        font-weight: 700;
+        color: #1E3A5F;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 1.2rem;
+        padding-bottom: .7rem;
+        border-bottom: 1px solid #F1F5F9;
+    }}
+
+    /* Rodapé */
+    .lg-foot {{
+        font-size: 10px;
+        color: #94A3B8;
+        text-align: center;
+        margin-top: 1.2rem;
+        letter-spacing: .04em;
+    }}
+    </style>
+
+    <!-- Wrapper que aplica shadow e rounded corners no conjunto header + form -->
+    <div class="lg-wrap">
+      <div class="lg-head">
+        {_logo_tag}
+        <div class="lg-product">PavControl</div>
+        <div class="lg-tagline">Gestão de Frota e Combustível</div>
+        <div class="lg-bar"></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Centraliza o form na mesma largura do header acima
+    _, c2, _ = st.columns([1, 1.55, 1])
     with c2:
         with st.form("login"):
-            if os.path.exists("logo.png"):
-                _, lc, _ = st.columns([1,2,1])
-                with lc: st.image("logo.png", width=200)
-
-            st.markdown("""
-            <div style='text-align:center;margin:1rem 0 1.5rem'>
-              <div style='font-size:11px;font-weight:700;letter-spacing:.1em;color:#64748B;text-transform:uppercase'>
-                COPA ENGENHARIA
-              </div>
-              <div style='font-size:20px;font-weight:700;color:#0F172A;margin-top:4px'>
-                PavControl
-              </div>
-            </div>""", unsafe_allow_html=True)
-
-            u = st.text_input("Usuário")
-            p = st.text_input("Senha", type="password")
+            st.markdown("<div class='lg-form-title'>Acesso ao Sistema</div>", unsafe_allow_html=True)
+            u = st.text_input("Usuário", placeholder="seu.login")
+            p = st.text_input("Senha",   placeholder="••••••••", type="password")
             st.write("")
-            if st.form_submit_button("ENTRAR", use_container_width=True):
-                ok = False
-                try:
-                    res = supabase.table("usuarios").select("*").eq("login",u).execute()
-                    if res.data:
-                        usr = res.data[0]
-                        if usr.get("senha") in (p, hsh(p)):
-                            st.session_state.logged_in = True
-                            st.session_state.usuario_logado = usr["nome"]
-                            st.session_state.perfil_logado  = usr.get("perfil","Operador")
-                            ok = True
-                except Exception: pass
-                if not ok:
-                    if u == st.secrets.get("ADMIN_USER","admin") and p == st.secrets.get("ADMIN_PASS","copa@2025"):
-                        st.session_state.logged_in = True
-                        st.session_state.usuario_logado = "Admin"
-                        st.session_state.perfil_logado  = "Admin"
+            submitted = st.form_submit_button("Entrar", use_container_width=True)
+            st.markdown("<div class='lg-foot'>© Copa Engenharia — Todos os direitos reservados</div>",
+                        unsafe_allow_html=True)
+
+        if submitted:
+            ok = False
+            try:
+                res = supabase.table("usuarios").select("*").eq("login", u).execute()
+                if res.data:
+                    usr = res.data[0]
+                    if usr.get("senha") in (p, hsh(p)):
+                        st.session_state.logged_in      = True
+                        st.session_state.usuario_logado = usr["nome"]
+                        st.session_state.perfil_logado  = usr.get("perfil", "Operador")
                         ok = True
-                if not ok:
-                    st.error("Usuário ou senha incorretos.")
-                elif st.session_state.logged_in:
-                    st.rerun()
+            except Exception:
+                pass
+            if not ok:
+                if (u == st.secrets.get("ADMIN_USER", "admin")
+                        and p == st.secrets.get("ADMIN_PASS", "copa@2025")):
+                    st.session_state.logged_in      = True
+                    st.session_state.usuario_logado = "Admin"
+                    st.session_state.perfil_logado  = "Admin"
+                    ok = True
+            if not ok:
+                st.error("Usuário ou senha incorretos.")
+            elif st.session_state.logged_in:
+                st.rerun()
     st.stop()
 
 
@@ -633,9 +791,15 @@ if not st.session_state.logged_in:
 # SIDEBAR
 # ═══════════════════════════════════════════════════════
 with st.sidebar:
+    # Logo via base64 para evitar container cinza do st.image
     if os.path.exists("logo.png"):
-        _, lc, _ = st.columns([1,2,1])
-        with lc: st.image("logo.png", width=180)
+        with open("logo.png", "rb") as _lf:
+            _sb_b64 = base64.b64encode(_lf.read()).decode()
+        st.markdown(f"""
+        <div style='text-align:center;padding:.6rem 0 .4rem;'>
+          <img src="data:image/png;base64,{_sb_b64}"
+               style="height:44px;object-fit:contain;filter:brightness(1.15);">
+        </div>""", unsafe_allow_html=True)
 
     ausentes  = tabelas_ausentes()
     cols_aus  = colunas_ausentes()
