@@ -11,7 +11,7 @@ from fpdf import FPDF
 # CONFIG
 # ═══════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="PavControl — COPA Engenharia",
+    page_title="Sistema de Abastecimentos — Copa Engenharia",
     page_icon="🛣️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -126,7 +126,7 @@ TABELAS_REQUERIDAS = [
 
 SQL_CRIAR_TABELAS = """
 -- ══════════════════════════════════════════════════════════════
--- PavControl — Script de Setup do Banco de Dados
+-- Sistema de Abastecimentos — Script de Setup
 -- Execute no SQL Editor do Supabase (aba "SQL Editor")
 -- É seguro rodar múltiplas vezes (IF NOT EXISTS / IF NOT EXISTS)
 -- ══════════════════════════════════════════════════════════════
@@ -572,193 +572,130 @@ for k,v in [("logged_in",False),("usuario_logado",""),("perfil_logado","")]:
 
 if not st.session_state.logged_in:
 
-    # Encode logo to base64 so it renders in pure HTML (sem container cinza do Streamlit)
+    # Encode logo — HTML puro, sem container cinza do Streamlit
     _logo_b64 = ""
     if os.path.exists("logo.png"):
         with open("logo.png", "rb") as _f:
             _logo_b64 = base64.b64encode(_f.read()).decode()
-    _logo_tag = (
-        f'<img src="data:image/png;base64,{_logo_b64}" '
-        f'style="height:56px;object-fit:contain;display:block;margin:0 auto 14px;">'
+
+    _logo_img = (
+        f'<img src="data:image/png;base64,{_logo_b64}" style="height:48px;object-fit:contain;">'
         if _logo_b64 else
-        '<div style="font-size:28px;font-weight:900;color:#fff;letter-spacing:-.02em;margin-bottom:12px;">COPA</div>'
+        '<span style="font-size:18px;font-weight:700;color:#1E3A5F;">COPA ENGENHARIA</span>'
     )
 
     st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
-    html,body,[class*="css"] {{ font-family:'IBM Plex Sans',sans-serif; }}
+    html,body,[class*="css"] {{ font-family:'IBM Plex Sans',sans-serif !important; }}
 
-    /* Fundo da página */
     [data-testid="stAppViewContainer"] {{
-        background: #0A1628 !important;
-        background-image:
-            radial-gradient(ellipse 80% 60% at 50% -10%, rgba(30,90,160,.35) 0%, transparent 70%),
-            repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 39px,
-                rgba(255,255,255,.018) 39px,
-                rgba(255,255,255,.018) 40px
-            ),
-            repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 79px,
-                rgba(255,255,255,.018) 79px,
-                rgba(255,255,255,.018) 80px
-            ) !important;
+        background: #1C2B3A !important;
     }}
     [data-testid="stHeader"]  {{ background:transparent !important; }}
-    [data-testid="stSidebar"] {{ display:none; }}
+    [data-testid="stSidebar"] {{ display:none !important; }}
 
-    /* Remove padding padrão do main */
     .main .block-container {{
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
+        padding: 7vh 1rem 2rem !important;
         max-width: 100% !important;
     }}
 
-    /* Card do login — zero padding para controlar internamente */
+    /* Card branco limpo — empresarial */
     div[data-testid="stForm"] {{
         background: #FFFFFF !important;
-        border-radius: 0 0 14px 14px !important;
-        padding: 2rem 2.4rem 2.4rem !important;
-        box-shadow: none !important;
+        border-radius: 0 0 4px 4px !important;
+        padding: 2.4rem 2.8rem 2.4rem !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,.28) !important;
         border: none !important;
     }}
 
-    /* Labels dos campos */
+    /* Labels */
     .stTextInput > label {{
-        font-size: 10px !important;
-        font-weight: 700 !important;
-        color: #94A3B8 !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        color: #64748B !important;
         text-transform: uppercase !important;
-        letter-spacing: .09em !important;
+        letter-spacing: .07em !important;
         margin-bottom: 4px !important;
     }}
 
     /* Inputs */
     div[data-baseweb="input"] {{
-        border-radius: 7px !important;
-        border: 1.5px solid #E2E8F0 !important;
-        background: #F8FAFC !important;
-        transition: border .15s ease !important;
+        border-radius: 3px !important;
+        border: 1px solid #CBD5E1 !important;
+        background: #FAFAFA !important;
     }}
     div[data-baseweb="input"]:focus-within {{
         border-color: #1E3A5F !important;
         background: #fff !important;
-        box-shadow: 0 0 0 3px rgba(30,58,95,.1) !important;
+        box-shadow: 0 0 0 2px rgba(30,58,95,.12) !important;
+    }}
+    div[data-baseweb="input"] input {{
+        color: #0F172A !important;
+        font-family: 'IBM Plex Sans', sans-serif !important;
+        font-size: 14px !important;
     }}
 
-    /* Botão ENTRAR */
+    /* Botão */
     div.stButton > button:first-child {{
         background: #1E3A5F !important;
         color: #fff !important;
         border: none !important;
-        border-radius: 7px !important;
-        font-weight: 700 !important;
+        border-radius: 3px !important;
+        font-weight: 600 !important;
         font-size: 12px !important;
-        letter-spacing: .1em !important;
+        letter-spacing: .08em !important;
         text-transform: uppercase !important;
-        padding: .75rem !important;
-        margin-top: .4rem !important;
-        transition: background .15s ease, transform .1s ease !important;
+        padding: .72rem !important;
+        margin-top: .6rem !important;
+        transition: background .12s ease !important;
     }}
     div.stButton > button:first-child:hover {{
         background: #152E4D !important;
-        transform: translateY(-1px) !important;
-    }}
-    div.stButton > button:first-child:active {{
-        transform: translateY(0) !important;
     }}
 
-    /* Card wrapper externo — controla shadow e border-radius geral */
-    .lg-wrap {{
-        max-width: 420px;
-        margin: 6vh auto 0;
-        border-radius: 14px;
-        box-shadow: 0 40px 100px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06);
+    /* Erro */
+    div[data-testid="stAlert"] {{
+        background: #FEF2F2 !important;
+        border: 1px solid #FECACA !important;
+        border-radius: 3px !important;
     }}
-
-    /* Header escuro do card */
-    .lg-head {{
-        background: linear-gradient(145deg, #0F1C2E 0%, #1a2f4e 100%);
-        padding: 2rem 2.4rem 1.6rem;
-        border-radius: 14px 14px 0 0;
-        text-align: center;
-        position: relative;
-    }}
-
-    .lg-product {{
-        font-size: 15px;
-        font-weight: 700;
-        color: #FFFFFF;
-        letter-spacing: .12em;
-        text-transform: uppercase;
-        margin-top: 0;
-    }}
-
-    .lg-tagline {{
-        font-size: 10px;
-        color: #4E7A9F;
-        font-weight: 500;
-        letter-spacing: .07em;
-        text-transform: uppercase;
-        margin-top: 3px;
-    }}
-
-    .lg-bar {{
-        height: 2px;
-        background: linear-gradient(90deg, transparent 0%, #3DD6A3 40%, #1E9FD6 60%, transparent 100%);
-        margin-top: 1.4rem;
-        border-radius: 2px;
-    }}
-
-    /* Subtítulo acima dos campos */
-    .lg-form-title {{
-        font-size: 12px;
-        font-weight: 700;
-        color: #1E3A5F;
-        letter-spacing: .06em;
-        text-transform: uppercase;
-        margin-bottom: 1.2rem;
-        padding-bottom: .7rem;
-        border-bottom: 1px solid #F1F5F9;
-    }}
-
-    /* Rodapé */
-    .lg-foot {{
-        font-size: 10px;
-        color: #94A3B8;
-        text-align: center;
-        margin-top: 1.2rem;
-        letter-spacing: .04em;
-    }}
+    div[data-testid="stAlert"] p {{ color: #991B1B !important; font-size:13px !important; }}
     </style>
-
-    <!-- Wrapper que aplica shadow e rounded corners no conjunto header + form -->
-    <div class="lg-wrap">
-      <div class="lg-head">
-        {_logo_tag}
-        <div class="lg-product">PavControl</div>
-        <div class="lg-tagline">Gestão de Frota e Combustível</div>
-        <div class="lg-bar"></div>
-      </div>
-    </div>
     """, unsafe_allow_html=True)
 
-    # Centraliza o form na mesma largura do header acima
-    _, c2, _ = st.columns([1, 1.55, 1])
+    _, c2, _ = st.columns([1, 1.38, 1])
     with c2:
+        # Faixa branca para o logo (sem conflito com fundo branco do PNG)
+        # + faixa navy abaixo com o nome do sistema
+        st.markdown(f"""
+        <div style="border-radius:4px 4px 0 0;overflow:hidden;
+                    box-shadow:0 8px 32px rgba(0,0,0,.28);">
+            <div style="background:#fff;padding:1.3rem 2.4rem;
+                        border-bottom:3px solid #1E3A5F;">
+                {_logo_img}
+            </div>
+            <div style="background:#1E3A5F;padding:1rem 2.4rem 1.2rem;">
+                <div style="font-size:13px;font-weight:600;color:#fff;letter-spacing:.02em;">
+                    Sistema de Abastecimentos
+                </div>
+                <div style="font-size:10px;color:#7FA8C9;margin-top:3px;letter-spacing:.02em;">
+                    Gestão de frota e combustível
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
         with st.form("login"):
-            st.markdown("<div class='lg-form-title'>Acesso ao Sistema</div>", unsafe_allow_html=True)
-            u = st.text_input("Usuário", placeholder="seu.login")
-            p = st.text_input("Senha",   placeholder="••••••••", type="password")
-            st.write("")
-            submitted = st.form_submit_button("Entrar", use_container_width=True)
-            st.markdown("<div class='lg-foot'>© Copa Engenharia — Todos os direitos reservados</div>",
-                        unsafe_allow_html=True)
+            u = st.text_input("Usuário")
+            p = st.text_input("Senha", type="password")
+            submitted = st.form_submit_button("Acessar", use_container_width=True)
+            st.markdown("""
+            <div style="margin-top:1.4rem;padding-top:1rem;
+                        border-top:1px solid #F1F5F9;
+                        font-size:9px;color:#CBD5E1;letter-spacing:.04em;">
+                © Copa Engenharia — Acesso restrito a usuários autorizados
+            </div>""", unsafe_allow_html=True)
 
         if submitted:
             ok = False
@@ -893,7 +830,7 @@ if menu == "Setup do Banco de Dados":
         col_dl.download_button(
             "Baixar script SQL",
             SQL_CRIAR_TABELAS,
-            file_name="setup_pavcontrol.sql",
+            file_name="setup_abastecimentos.sql",
             mime="text/plain",
             use_container_width=True,
         )
